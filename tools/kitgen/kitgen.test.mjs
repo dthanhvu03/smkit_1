@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
-import { collectSkills, collectBuildWarnings } from "../../engine/emitter.mjs";
+import { collectSkills, collectBuildWarnings, validateSkillGovernance } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -453,6 +453,68 @@ test("skills: new two-layer skill emits allowed-tools + disable-model-invocation
   assert.match(md, /disable-model-invocation: true/);
   assert.ok(existsSync(join(tmp, "out", ".claude", "skills", "demo-skill", "scripts", "run.sh")), "script emitted");
   assert.ok(!existsSync(join(tmp, "out", ".claude", "skills", "demo-skill", "tests")), "tests/ must NOT be emitted");
+});
+
+// ---- P1: skill.kit.yaml governance validation (trust tier / permission self-consistency) ----
+function writeSkill(kitDir, id, md, kitYaml) {
+  const dir = join(kitDir, "engine", "skills", id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), md);
+  if (kitYaml) writeFileSync(join(dir, "skill.kit.yaml"), kitYaml);
+}
+
+test("governance: real kit's shipped T0 skills have zero governance errors/warnings", () => {
+  const r = validateSkillGovernance(KIT_ROOT);
+  assert.deepEqual(r, { errors: [], warnings: [] });
+});
+
+test("governance: invalid trustTier enum is rejected", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "bad-tier", "---\nname: bad-tier\ndescription: Use when demoing.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: bad-tier\ntrustTier: T9\n");
+  const r = validateSkillGovernance(tmp);
+  assert.match(r.errors.join("|"), /trustTier "T9" không hợp lệ/);
+});
+
+test("governance: T3/T4 must be manual-only + content-hashed, else build fails with no output", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "risky", "---\nname: risky\ndescription: Use when risky.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: risky\ntrustTier: T3\n"); // implicit defaults true, no hash
+  const r = validateSkillGovernance(tmp);
+  assert.match(r.errors.join("|"), /phải manual-only/);
+  assert.match(r.errors.join("|"), /thiếu provenance\.contentHash/);
+
+  const built = runKit(tmp, "build");
+  assert.equal(built.status, 1);
+  assert.ok(!existsSync(join(tmp, "out")), "no output for a skill that violates its trust tier");
+});
+
+test("governance: T3 manual-only + contentHash passes; build succeeds", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "risky-ok", "---\nname: risky-ok\ndescription: Use when risky but pinned.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: risky-ok\ntrustTier: T3\ninvocation:\n  implicit: false\n  manual: true\nprovenance:\n  contentHash: \"abc123\"\n");
+  assert.deepEqual(validateSkillGovernance(tmp).errors, []);
+  assert.equal(runKit(tmp, "build").status, 0);
+});
+
+test("governance: preApprovedTools contradicting deniedTools or unrequested tools is rejected", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "contra", "---\nname: contra\ndescription: Use when contradicting.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: contra\npermissions:\n  requestedTools:\n    - Read\n  deniedTools:\n    - Bash\n  preApprovedTools:\n    - Bash\n");
+  assert.match(validateSkillGovernance(tmp).errors.join("|"), /vừa deniedTools vừa preApprovedTools/);
+
+  const tmp2 = copyKit();
+  writeSkill(tmp2, "unreq", "---\nname: unreq\ndescription: Use when unrequested.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: unreq\npermissions:\n  requestedTools:\n    - Read\n  preApprovedTools:\n    - Bash\n");
+  assert.match(validateSkillGovernance(tmp2).errors.join("|"), /không nằm trong requestedTools/);
+});
+
+test("governance: long or vague description warns (doctor-visible), does not block build", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "vague", "---\nname: vague\ndescription: Does stuff sometimes maybe.\n---\n\n# x\n");
+  const r = validateSkillGovernance(tmp);
+  assert.match(r.warnings.join("|"), /thiếu cue/);
+  assert.equal(runKit(tmp, "build").status, 0, "a vague description warns but does not fail the build");
 });
 
 test("skills: metadata must be string→string — nested value dropped with a warning", () => {

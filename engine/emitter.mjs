@@ -145,6 +145,48 @@ export function collectBuildWarnings(kitDir) {
   return warnings;
 }
 
+export const SKILL_TRUST_TIERS = ["T0", "T1", "T2", "T3", "T4"];
+const HIGH_RISK_TIERS = new Set(["T3", "T4"]);
+const SKILL_DESC_LIMIT = 1536; // Claude Code's listing truncation cap (verified 2026-07-11)
+
+// Governance rules a skill must not violate — checked BEFORE generation (build fails,
+// nothing is written) so a skill can never self-escalate beyond its declared trust
+// tier or request a permission that contradicts itself. Pure/read-only.
+export function validateSkillGovernance(kitDir) {
+  const errors = [];
+  const warnings = [];
+  for (const s of collectSkills(kitDir)) {
+    const gov = s.gov || {};
+    const tier = gov.trustTier;
+    const tag = `skill "${s.id}"`;
+
+    if (tier !== undefined && !SKILL_TRUST_TIERS.includes(tier))
+      errors.push(`${tag}: trustTier "${tier}" không hợp lệ -> dùng ${SKILL_TRUST_TIERS.join(" | ")}`);
+
+    if (HIGH_RISK_TIERS.has(tier)) {
+      if (gov.invocation?.implicit !== false)
+        errors.push(`${tag}: trustTier ${tier} phải manual-only -> đặt invocation.implicit: false trong skill.kit.yaml`);
+      if (!gov.provenance?.contentHash)
+        errors.push(`${tag}: trustTier ${tier} thiếu provenance.contentHash -> pin nội dung bằng hash trước khi dùng`);
+    }
+
+    const requested = new Set(gov.permissions?.requestedTools || []);
+    const denied = new Set(gov.permissions?.deniedTools || []);
+    for (const t of gov.permissions?.preApprovedTools || []) {
+      if (denied.has(t)) errors.push(`${tag}: tool "${t}" vừa deniedTools vừa preApprovedTools -> mâu thuẫn`);
+      else if (requested.size && !requested.has(t))
+        errors.push(`${tag}: preApprovedTools "${t}" không nằm trong requestedTools -> khai báo requestedTools trước`);
+    }
+
+    const descLen = (s.description || "").length;
+    if (descLen > SKILL_DESC_LIMIT)
+      warnings.push(`${tag}: description dài ${descLen} ký tự (>${SKILL_DESC_LIMIT}) -> rút gọn, đưa chi tiết vào references/`);
+    if (s.description && !/use when|invoke/i.test(s.description))
+      warnings.push(`${tag}: description thiếu cue "Use when"/"Invoke" -> agent khó chọn đúng skill`);
+  }
+  return { errors, warnings };
+}
+
 // Merge invariants across layers: engine → profile → project (F-07). Each invariant
 // gets a stable id (explicit `id` or slug of its path); a duplicate id is a conflict
 // unless the PROJECT layer explicitly sets `override: true` over a lower layer.

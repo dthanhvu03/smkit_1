@@ -6,7 +6,7 @@
 // error BEFORE creating, deleting, or writing anything.
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
-import { collectInvariants } from "../../engine/emitter.mjs";
+import { collectInvariants, validateSkillGovernance } from "../../engine/emitter.mjs";
 
 export const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 export const MODES = ["vibe", "standard", "strict"];
@@ -73,6 +73,15 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
   if (kitDir && !errors.some((e) => e.includes("stack.profile"))) {
     try { collectInvariants(kitDir, cfg); }
     catch (e) { errors.push(e.message); }
+  }
+
+  // Skill governance: a skill must never self-escalate beyond its declared trust
+  // tier (T3/T4 must be manual-only + content-hashed) or request a self-contradictory
+  // permission (pre-approved yet denied, or pre-approved without being requested).
+  if (kitDir) {
+    const sg = validateSkillGovernance(kitDir);
+    errors.push(...sg.errors);
+    warnings.push(...sg.warnings);
   }
 
   // Filesystem boundary: refuse to generate outside the project (write + the
