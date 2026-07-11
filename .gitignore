@@ -10,6 +10,9 @@ node_modules/
 # Guard audit log (runtime, not tamper-evident)
 .kit/audit.log
 
+# Ownership manifest (per-project build state, regenerated each build)
+.kit/build-manifest.json
+
 
 #Ignore cursor AI rules
 .cursor\rules\codacy.mdc

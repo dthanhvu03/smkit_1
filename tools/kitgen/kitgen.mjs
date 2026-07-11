@@ -5,11 +5,12 @@
 //   node tools/kitgen/kitgen.mjs build     write generated files into outDir
 //   node tools/kitgen/kitgen.mjs check     fail (exit 1) if outDir is out of sync
 //   node tools/kitgen/kitgen.mjs doctor    health-check the kit + generated output
-import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
+import { applyBuild } from "./apply.mjs";
 import { buildOutputs, collectRules, collectRoles, collectSkills } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
@@ -193,23 +194,15 @@ function main() {
     return;
   }
 
-  // build — clean only the dirs the kit owns (so stale generated files don't linger),
-  // each guarded so a locked/leftover file (e.g. an editor-held rule) never crashes the build,
-  // and so a user's own .claude/.cursor files outside these dirs are left untouched.
-  const ownedDirs = [
-    ".claude/rules", ".claude/agents", ".claude/commands",
-    ".cursor/rules", ".cursor/commands",
-    ".github/instructions", ".windsurf/rules",
-  ];
-  for (const d of ownedDirs) {
-    try { rmSync(pp(outDir, d), { recursive: true, force: true }); } catch { /* locked/missing — ignore */ }
-  }
-  for (const [rel, content] of outputs) {
-    const abs = pp(outDir, rel);
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, content);
-  }
+  // build — apply via the ownership manifest: delete only files THIS kit generated
+  // before (and only if unmodified), never blanket-delete a directory. User-authored
+  // files that the kit doesn't generate are always left untouched.
+  const force = process.argv.includes("--force");
+  const res = applyBuild({ outDir, outputs, projectDir: PROJECT_DIR, force });
+  for (const w of res.warnings) console.error(`WARN: ${w}`);
   console.log(`Built ${outputs.size} file(s) → ${outDir}/  (mode=${cfg.mode}, profile=${cfg.stack?.profile}, lang=${cfg.project?.language})`);
+  if (res.deleted) console.log(`  removed ${res.deleted} stale generated file(s)`);
+  if (res.skipped) console.log(`  skipped ${res.skipped} protected file(s) — rerun with --force to replace`);
   for (const rel of [...outputs.keys()].sort()) console.log(`  ${outDir}/${rel}`);
 }
 
