@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
-import { applyBuild } from "./apply.mjs";
+import { applyBuild, classifyDrift } from "./apply.mjs";
 import { buildOutputs, collectRules, collectRoles, collectSkills } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
@@ -24,14 +24,23 @@ const pp = (...s) => join(PROJECT_DIR, ...s);
 
 // ---- doctor ---------------------------------------------------------------
 const HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" }; // enforce:hook rule.id -> hook file
+
+// Mask secret-looking values in doctor messages before they reach --json output.
+// Doctor messages are paths/config today; this is a safeguard, not the primary defense.
+function redactSecrets(s) {
+  return String(s).replace(
+    /\b(token|secret|password|passwd|api[_-]?key|authorization)\b(\s*[:=]\s*)\S+/gi,
+    "$1$2***",
+  );
+}
 const OUTPUT_SECTION = /output format|required output|final output/i;
 
 // Read-only health check of the kit + generated output. Returns an exit code.
 function runDoctor() {
   const R = [];
-  const ok = (g, m) => R.push({ g, level: "ok", m });
-  const warn = (g, m) => R.push({ g, level: "warn", m });
-  const err = (g, m) => R.push({ g, level: "error", m });
+  const ok = (g, m, code) => R.push({ g, level: "ok", m, code });
+  const warn = (g, m, code) => R.push({ g, level: "warn", m, code });
+  const err = (g, m, code) => R.push({ g, level: "error", m, code });
   const clean = (g) => R.filter((r) => r.g === g && r.level !== "ok").length === 0;
 
   // 1. Node
@@ -78,15 +87,16 @@ function runDoctor() {
     catch (e) { err("Generated output", `không dựng được output để so drift (${e.message})`); }
   }
 
-  // 4. Drift
+  // 4. Drift — classified against the ownership manifest (F-08).
   if (outputs) {
-    let drift = 0;
-    for (const [rel, content] of outputs) {
-      const abs = pp(outDir, rel);
-      if ((existsSync(abs) ? readFileSync(abs, "utf8") : null) !== content) drift++;
-    }
-    if (drift) err("Generated output", `${outDir}/ lệch nguồn (${drift} file) -> chạy: npm run build`);
-    else ok("Generated output", `${outputs.size} file khớp (${outDir}/)`);
+    const { missing, modified, stale, unexpected } = classifyDrift({ outDir, outputs, projectDir: PROJECT_DIR });
+    for (const r of missing) err("Generated output", `MISSING_OWNED: ${outDir}/${r}`, "MISSING_OWNED");
+    for (const r of modified) err("Generated output", `MODIFIED_OWNED: ${outDir}/${r}`, "MODIFIED_OWNED");
+    for (const r of stale) warn("Generated output", `STALE_OWNED: ${outDir}/${r} -> chạy build để dọn`, "STALE_OWNED");
+    for (const r of unexpected) warn("Generated output", `UNEXPECTED_UNOWNED: ${outDir}/${r} (không do kit sinh; được giữ lại)`, "UNEXPECTED_UNOWNED");
+    const driftN = missing.length + modified.length;
+    if (driftN) err("Generated output", `${outDir}/ lệch nguồn (${driftN} file) -> chạy: npm run build`, "DRIFT");
+    else if (!stale.length && !unexpected.length) ok("Generated output", `${outputs.size} file khớp (${outDir}/)`);
   }
 
   // Hooks: settings cross-check (WARN)
@@ -141,6 +151,25 @@ function runDoctor() {
     if (!fm.tools) warn("Roles", `role "${n}" thiếu tools`);
   }
   if (roles.length && clean("Roles")) ok("Roles", `${roles.length} role có description trigger + model + tools`);
+
+  const errCount = R.filter((r) => r.level === "error").length;
+  const warnCount = R.filter((r) => r.level === "warn").length;
+
+  // ---- machine-readable output (F-11) ----
+  if (process.argv.includes("--json")) {
+    const sevOf = { ok: "info", warn: "warning", error: "error" };
+    const results = R
+      .map((r) => ({ group: r.g, severity: sevOf[r.level], code: r.code || null, message: redactSecrets(r.m) }))
+      .sort((a, b) => `${a.group} ${a.code} ${a.message}`.localeCompare(`${b.group} ${b.code} ${b.message}`));
+    process.stdout.write(JSON.stringify({
+      schemaVersion: 1,
+      tool: "smkit-doctor",
+      project: cfg?.project?.name ?? null,
+      summary: { errors: errCount, warnings: warnCount },
+      results,
+    }, null, 2) + "\n");
+    return errCount > 0 ? 1 : 0;
+  }
 
   // ---- print ----
   console.log(`SM Kit doctor — ${cfg?.project?.name || "?"} (mode=${cfg?.mode || "?"}, profile=${cfg?.stack?.profile || "?"})\n`);

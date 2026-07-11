@@ -5,10 +5,47 @@
 //   planBuild()  — READ-ONLY. Decides deletes/writes/skips. Never mutates.
 //   applyBuild() — executes the plan and saves the manifest.
 // P0.3 wraps the mutating part of applyBuild in a backup/rollback transaction.
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, mkdtempSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, mkdtempSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { sha256, loadManifest, saveManifest } from "./manifest.mjs";
+
+// Classify the state of the output tree against the expected outputs and the manifest.
+// Used by doctor (F-08). READ-ONLY.
+//   MISSING_OWNED       — expected file absent on disk
+//   MODIFIED_OWNED      — expected file present but content differs
+//   STALE_OWNED         — in the previous manifest, no longer emitted, still on disk
+//   UNEXPECTED_UNOWNED  — a file inside a kit-owned directory that the kit neither
+//                         emits now nor recorded before (kept, but surfaced)
+export function classifyDrift({ outDir, outputs, projectDir }) {
+  const pp = (...s) => join(projectDir, outDir, ...s);
+  const manifest = loadManifest(projectDir);
+  const prev = manifest.outDir === outDir ? manifest.files : {};
+  const missing = [], modified = [], stale = [], unexpected = [];
+
+  for (const [rel, content] of outputs) {
+    if (!existsSync(pp(rel))) missing.push(rel);
+    else if (readFileSync(pp(rel), "utf8") !== content) modified.push(rel);
+  }
+  for (const rel of Object.keys(prev)) {
+    if (!outputs.has(rel) && existsSync(pp(rel))) stale.push(rel);
+  }
+
+  const known = new Set([...outputs.keys(), ...Object.keys(prev)]);
+  const ownedDirs = new Set([...known].map(dirname).filter((d) => d && d !== "."));
+  for (const d of ownedDirs) {
+    if (!existsSync(pp(d))) continue;
+    for (const f of readdirSync(pp(d))) {
+      const rel = `${d}/${f}`;
+      try { if (!statSync(pp(rel)).isFile()) continue; } catch { continue; }
+      if (!known.has(rel)) unexpected.push(rel);
+    }
+  }
+  return {
+    missing: missing.sort(), modified: modified.sort(),
+    stale: stale.sort(), unexpected: unexpected.sort(),
+  };
+}
 
 // Compute the change plan. Pure/read-only.
 //   force: overwrite locally-modified / untracked files even when a manifest exists.

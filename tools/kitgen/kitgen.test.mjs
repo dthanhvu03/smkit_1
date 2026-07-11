@@ -201,6 +201,43 @@ test("doctor: drift detected → exit 1 with actual outDir (adjustment 2)", () =
   assert.match(r.stdout, /out\/ lệch nguồn/);
 });
 
+// ---- F-08 / F-11: doctor drift classification + --json --------------------
+test("doctor: --json is valid, deterministic, schema-versioned, 0 errors when healthy", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  const r = runKit(tmp, "doctor", "--json");
+  assert.equal(r.status, 0, r.stdout);
+  const j = JSON.parse(r.stdout);
+  assert.equal(j.schemaVersion, 1);
+  assert.equal(j.summary.errors, 0);
+  assert.ok(Array.isArray(j.results));
+  // deterministic: two runs produce identical JSON
+  assert.equal(runKit(tmp, "doctor", "--json").stdout, r.stdout);
+});
+
+test("doctor: classifies MODIFIED / MISSING / UNEXPECTED / STALE (F-08)", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  writeFileSync(join(tmp, "out", "CLAUDE.md"), readFileSync(join(tmp, "out", "CLAUDE.md"), "utf8") + "X"); // MODIFIED
+  rmSync(join(tmp, "out", "AGENTS.md"), { force: true }); // MISSING
+  writeFileSync(join(tmp, "out", ".claude", "rules", "mine.md"), "user\n"); // UNEXPECTED
+  editFile(join(tmp, "kit.config.yaml"), "\n  - windsurf", ""); // windsurf files now STALE (not rebuilt)
+  const r = runKit(tmp, "doctor", "--json");
+  assert.equal(r.status, 1);
+  const codes = new Set(JSON.parse(r.stdout).results.map((x) => x.code));
+  for (const c of ["MODIFIED_OWNED", "MISSING_OWNED", "UNEXPECTED_UNOWNED", "STALE_OWNED"])
+    assert.ok(codes.has(c), `expected drift code ${c}; got ${[...codes].join(",")}`);
+});
+
+test("doctor: --json redacts secret-looking values", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  // inject a secret-shaped agent name so a validator message would echo it
+  editFile(join(tmp, "kit.config.yaml"), "  - windsurf", "  - windsurf\n  - token=SUPERSECRET123");
+  const r = runKit(tmp, "doctor", "--json");
+  assert.doesNotMatch(r.stdout, /SUPERSECRET123/, "secret value must be redacted in JSON");
+});
+
 // ---- guard v2 classify (bypass suite) -------------------------------------
 const dec = (cmd, opts) => classifyCommand(cmd, opts).decision;
 
