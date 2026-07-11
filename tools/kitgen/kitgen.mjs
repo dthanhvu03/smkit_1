@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
 import { applyBuild, classifyDrift } from "./apply.mjs";
-import { buildOutputs, collectRules, collectRoles, collectSkills } from "../../engine/emitter.mjs";
+import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
 // so it works whether the kit is the project root or an installed dep.
@@ -135,9 +135,11 @@ function runDoctor() {
     const s = byId.get(id);
     if (!s) { err("Skills", `thiếu skill ${id}`); continue; }
     if (!s.description) warn("Skills", `skill ${id} thiếu description`);
-    if (!Array.isArray(s.paths) || !s.paths.length) warn("Skills", `skill ${id} thiếu paths`);
     if (!OUTPUT_SECTION.test(s.body)) warn("Skills", `skill ${id} thiếu mục output format`);
   }
+  // Skill schema / migration warnings (name!=dir, non-standard paths/related_*, bad metadata).
+  for (const w of collectBuildWarnings(KIT_DIR))
+    warn("Skills", `${w.field} @ ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`, "SKILL_SCHEMA");
   if (clean("Skills")) ok("Skills", "code-review, refactor, test-design");
 
   // 8. Roles
@@ -215,6 +217,9 @@ function main() {
   }
 
   const outDir = cfg.outDir || "dist";
+  // Surface skill schema / capability-drop warnings (never silent).
+  for (const w of collectBuildWarnings(KIT_DIR))
+    console.error(`WARN [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
 
   if (mode === "check") {

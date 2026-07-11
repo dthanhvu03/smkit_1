@@ -60,16 +60,89 @@ export function collectCommands(kitDir) {
   });
 }
 
-export function collectSkills(kitDir) {
-  const dir = "engine/skills";
-  if (!existsSync(join(kitDir, dir))) return [];
-  return readdirSync(join(kitDir, dir))
-    .filter((d) => existsSync(join(kitDir, dir, d, "SKILL.md")))
+const SKILLS_DIR = "engine/skills";
+const SUPPORT_SUBDIRS = ["scripts", "references", "assets"]; // NOT tests/ (never emitted)
+
+function listFilesRec(base, prefix = "") {
+  const out = [];
+  for (const e of readdirSync(base, { withFileTypes: true })) {
+    if (e.isDirectory()) out.push(...listFilesRec(join(base, e.name), `${prefix}${e.name}/`));
+    else out.push(prefix + e.name);
+  }
+  return out;
+}
+
+// Load one skill as the normalized two-layer model: a portable SKILL.md (Agent Skills
+// open standard — metadata is string→string only) plus an optional kit governance
+// sidecar (skill.kit.yaml). Old single-file skills (id/paths/related_*) are migrated
+// in-memory for one release, each divergence recorded as a warning (never silent).
+function normalizeSkill(kitDir, d, warn) {
+  const { fm, body } = parseFrontmatter(readAt(kitDir, join(SKILLS_DIR, d, "SKILL.md")));
+  const src = `${SKILLS_DIR}/${d}/SKILL.md`;
+
+  // name MUST equal the directory (Agent Skills identity + command name).
+  if (fm.name && fm.name !== d)
+    warn({ target: "skill", field: "name", source: src, message: `name "${fm.name}" != directory "${d}"; using the directory name`, remediation: "set SKILL.md name to the folder name" });
+
+  // paths is not an Agent Skills field — skills activate by description, not globs.
+  if (fm.paths)
+    warn({ target: "skill", field: "paths", source: src, message: `"paths" is not an Agent Skills field and is dropped from SKILL.md`, remediation: "model path-gating as a Rule that recommends this skill" });
+
+  // metadata must be a string→string map.
+  const metadata = {};
+  if (fm.metadata && typeof fm.metadata === "object" && !Array.isArray(fm.metadata)) {
+    for (const [k, v] of Object.entries(fm.metadata)) {
+      if (v !== null && typeof v === "object")
+        warn({ target: "skill", field: `metadata.${k}`, source: src, message: "metadata must be string→string; complex value ignored", remediation: "move it to skill.kit.yaml" });
+      else metadata[String(k)] = String(v);
+    }
+  }
+
+  // governance sidecar, or a backward-compat shim derived from old fields.
+  const sidecar = join(kitDir, SKILLS_DIR, d, "skill.kit.yaml");
+  let gov;
+  if (existsSync(sidecar)) {
+    gov = parseYaml(readFileSync(sidecar, "utf8")) || {};
+  } else {
+    gov = {
+      invocation: { implicit: true, manual: true },
+      permissions: { requestedTools: [], deniedTools: [], preApprovedTools: [] },
+      relatedRoles: fm.related_roles || [],
+      relatedRules: fm.related_rules || [],
+    };
+    if (fm.related_roles || fm.related_rules)
+      warn({ target: "skill", field: "related_*", source: src, message: "related_roles/related_rules are non-standard and are dropped from SKILL.md", remediation: "declare them in skill.kit.yaml" });
+  }
+
+  // supporting resources (scripts/references/assets), emitted alongside SKILL.md.
+  const supporting = [];
+  for (const sub of SUPPORT_SUBDIRS) {
+    const abs = join(kitDir, SKILLS_DIR, d, sub);
+    if (existsSync(abs)) for (const f of listFilesRec(abs)) supporting.push({ rel: `${sub}/${f}`, abs: join(abs, f) });
+  }
+
+  return {
+    id: d, name: d, description: fm.description || "",
+    license: fm.license, compatibility: fm.compatibility, metadata,
+    body: body.trim(), gov, supporting, user_invocable: fm.user_invocable,
+  };
+}
+
+// Collect all skills. `warn` is an optional sink for migration/validation warnings.
+export function collectSkills(kitDir, warn = () => {}) {
+  if (!existsSync(join(kitDir, SKILLS_DIR))) return [];
+  return readdirSync(join(kitDir, SKILLS_DIR))
+    .filter((d) => existsSync(join(kitDir, SKILLS_DIR, d, "SKILL.md")))
     .sort()
-    .map((d) => {
-      const { fm, body } = parseFrontmatter(readAt(kitDir, join(dir, d, "SKILL.md")));
-      return { ...fm, id: fm.id || d, body: body.trim() };
-    });
+    .map((d) => normalizeSkill(kitDir, d, warn));
+}
+
+// Re-run skill collection purely to gather warnings (used by build + doctor to surface
+// capability drops / migration notices without changing buildOutputs' Map contract).
+export function collectBuildWarnings(kitDir) {
+  const warnings = [];
+  collectSkills(kitDir, (w) => warnings.push(w));
+  return warnings;
 }
 
 // Merge invariants across layers: engine → profile → project (F-07). Each invariant
@@ -188,12 +261,13 @@ ${idx("Roles", roles.map((r) => `**${r.fm.name}** — ${r.fm.description || ""}`
 }
 
 function emitClaudeSkill(skill, S) {
-  const fm = [`# ${S.generated_banner}`, `name: ${y(skill.name || skill.id)}`];
+  // Agent Skills open standard + Claude extensions. No `paths` (not a skill field).
+  const fm = [`# ${S.generated_banner}`, `name: ${y(skill.name)}`];
   if (skill.description) fm.push(`description: ${y(skill.description)}`);
-  if (Array.isArray(skill.paths) && skill.paths.length) {
-    fm.push("paths:");
-    for (const g of skill.paths) fm.push(`  - "${g}"`);
-  }
+  // allowed-tools ONLY from pre-approved tools — never auto-promote requestedTools.
+  const preApproved = skill.gov?.permissions?.preApprovedTools || [];
+  if (preApproved.length) fm.push(`allowed-tools: ${preApproved.join(", ")}`);
+  if (skill.gov?.invocation?.implicit === false) fm.push("disable-model-invocation: true");
   if (skill.user_invocable === false) fm.push("user-invocable: false");
   return `---\n${fm.join("\n")}\n---\n\n${skill.body}\n`;
 }
@@ -280,7 +354,11 @@ class ClaudeEmitter extends Emitter {
     for (const r of rules) out.push([`.claude/rules/${r.id}.md`, emitClaudeRule(r, S)]);
     for (const role of roles) out.push([`.claude/agents/${role.fm.name}.md`, emitAgent(role, S)]);
     for (const c of commands) out.push([`.claude/commands/${c.id}.md`, emitClaudeCommand(c, S)]);
-    for (const s of skills) out.push([`.claude/skills/${s.id}/SKILL.md`, emitClaudeSkill(s, S)]);
+    for (const s of skills) {
+      out.push([`.claude/skills/${s.id}/SKILL.md`, emitClaudeSkill(s, S)]);
+      // Bundle supporting resources (scripts/references/assets); tests/ is never emitted.
+      for (const sup of s.supporting) out.push([`.claude/skills/${s.id}/${sup.rel}`, readFileSync(sup.abs, "utf8")]);
+    }
     out.push([".claude/settings.json", emitSettings(cfg, S)]);
     return out;
   }

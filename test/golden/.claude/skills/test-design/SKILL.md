@@ -1,9 +1,7 @@
 ---
 # GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
-name: "Test Design"
+name: "test-design"
 description: "Use when a task needs a QA or test gate. Invoke to design test cases and edge cases and to produce the exact commands that prove the behavior works."
-paths:
-  - "**/*"
 ---
 
 # Test Design skill

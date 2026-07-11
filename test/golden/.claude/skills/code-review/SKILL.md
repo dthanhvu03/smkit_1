@@ -1,9 +1,7 @@
 ---
 # GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
-name: "Code Review"
+name: "code-review"
 description: "Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells."
-paths:
-  - "**/*"
 ---
 
 # Code Review skill

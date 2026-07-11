@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
+import { collectSkills, collectBuildWarnings } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -401,6 +402,57 @@ test("invariants: project override:true replaces the profile invariant (F-07)", 
   assert.equal(runKit(tmp, "build").status, 0);
   const mdc = readFileSync(join(tmp, "out", ".cursor", "rules", "invariant-1-app-route-ts.mdc"), "utf8");
   assert.match(mdc, /project wins here/);
+});
+
+// ---- P0 skills: two-layer schema (Agent Skills standard + kit sidecar) ----
+const KIT_ROOT = KIT;
+
+test("skills: emitted SKILL.md is standard-compliant — name = dir, no `paths`", () => {
+  const skills = collectSkills(KIT_ROOT);
+  for (const s of skills) {
+    assert.equal(s.name, s.id, "skill name must equal its directory");
+    assert.ok(!("paths" in s) || s.paths === undefined, "normalized skill carries no paths");
+  }
+  const gen = readFileSync(join(GOLDEN, ".claude", "skills", "code-review", "SKILL.md"), "utf8");
+  assert.match(gen, /name: "code-review"/);
+  assert.doesNotMatch(gen, /^paths:/m, "emitted skill must not contain a paths block");
+});
+
+test("skills: migrating old-format skills warns (name/paths/related_*) — never silent", () => {
+  const w = collectBuildWarnings(KIT_ROOT);
+  const fields = new Set(w.map((x) => x.field));
+  for (const f of ["name", "paths", "related_*"]) assert.ok(fields.has(f), `expected migration warning for ${f}`);
+  for (const x of w) { assert.ok(x.source, "warning has source path"); assert.ok(x.message, "warning has message"); }
+});
+
+test("skills: new two-layer skill emits allowed-tools + disable-model-invocation + supporting files, not tests/", () => {
+  const tmp = copyKit();
+  const sk = join(tmp, "engine", "skills", "demo-skill");
+  mkdirSync(join(sk, "scripts"), { recursive: true });
+  mkdirSync(join(sk, "tests"), { recursive: true });
+  writeFileSync(join(sk, "SKILL.md"),
+    "---\nname: demo-skill\ndescription: Demo. Use when testing the loader.\nlicense: Proprietary\nmetadata:\n  sixmen-trust-tier: \"T0\"\n---\n\n# Demo\n## Output format (required)\nok\n");
+  writeFileSync(join(sk, "skill.kit.yaml"),
+    "schemaVersion: 1\nid: demo-skill\ninvocation:\n  implicit: false\n  manual: true\npermissions:\n  preApprovedTools:\n    - Read\n    - Grep\n");
+  writeFileSync(join(sk, "scripts", "run.sh"), "echo hi\n");
+  writeFileSync(join(sk, "tests", "t.txt"), "should not be emitted\n");
+  assert.equal(runKit(tmp, "build").status, 0);
+  const md = readFileSync(join(tmp, "out", ".claude", "skills", "demo-skill", "SKILL.md"), "utf8");
+  assert.match(md, /name: "demo-skill"/);
+  assert.match(md, /allowed-tools: Read, Grep/);
+  assert.match(md, /disable-model-invocation: true/);
+  assert.ok(existsSync(join(tmp, "out", ".claude", "skills", "demo-skill", "scripts", "run.sh")), "script emitted");
+  assert.ok(!existsSync(join(tmp, "out", ".claude", "skills", "demo-skill", "tests")), "tests/ must NOT be emitted");
+});
+
+test("skills: metadata must be string→string — nested value dropped with a warning", () => {
+  const tmp = copyKit();
+  const sk = join(tmp, "engine", "skills", "bad-meta");
+  mkdirSync(sk, { recursive: true });
+  writeFileSync(join(sk, "SKILL.md"),
+    "---\nname: bad-meta\ndescription: bad metadata demo\nmetadata:\n  good: \"1\"\n  nested:\n    x: y\n---\n\n# Bad\n");
+  const warns = collectBuildWarnings(join(tmp));
+  assert.ok(warns.some((x) => x.field === "metadata.nested"), "nested metadata must warn");
 });
 
 // ---- guard v2 audit log (E2E) ---------------------------------------------
