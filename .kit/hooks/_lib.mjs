@@ -154,6 +154,35 @@ function worstTarget(targets, projDir, phrase) {
 
 const hasFlag = (tokens, re) => tokens.some((t) => re.test(t));
 
+// Supply-chain / obfuscation risks (F-06). Returns {decision, reason} where decision
+// is warn | highrisk (highrisk → block in strict, warn otherwise). curl|sh is handled
+// separately by the network→exec check.
+export function classifySupplyChain(seg, tokens, verb) {
+  const v = (verb || "").toLowerCase();
+  const sub = (tokens[1] || "").toLowerCase();
+
+  // Running an unpinned package straight from the registry.
+  const isDlx = (v === "npx") || (v === "bunx") || ((v === "pnpm" || v === "yarn") && sub === "dlx");
+  if (isDlx) {
+    const start = (v === "pnpm" || v === "yarn") ? 2 : 1;
+    const pkg = tokens.slice(start).find((t) => !t.startsWith("-"));
+    if (pkg && !pkg.includes("@"))
+      return { decision: "warn", reason: `runs an unpinned package (${v}${sub === "dlx" ? " dlx" : ""} "${pkg}") — pin a version or vet it first` };
+  }
+
+  // Installing a dependency from a remote URL or git source.
+  if ((v === "npm" || v === "pnpm" || v === "yarn" || v === "bun") &&
+      /\b(install|add|i)\b/.test(seg) && /(https?:\/\/|git\+|github:|git@)/.test(seg))
+    return { decision: "warn", reason: "installs a dependency from a remote/git source — vet it before trusting" };
+
+  // PowerShell encoded / base64 command — cannot be analysed.
+  if ((/\b(?:powershell|pwsh)\b/i.test(seg) && /(?:^|\s)-e(?:nc(?:odedcommand)?)?\b/i.test(seg)) ||
+      /FromBase64String/i.test(seg))
+    return { decision: "highrisk", reason: "PowerShell encoded/base64 command — payload cannot be inspected" };
+
+  return null;
+}
+
 // Detect a destructive command that operates INSIDE the workspace. Returns
 // {decision, reason} or null. String-level (matches the guard's tokenize model),
 // covering POSIX and Windows verbs even though the hook binds the Bash tool.
@@ -221,6 +250,15 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
     const destr = classifyDestructive(seg, tokens, verb, projDir);
     if (destr?.decision === "block") return { ...destr, segment: seg };
     if (destr?.decision === "warn") warn = warn || { ...destr, segment: seg };
+
+    // Supply-chain / obfuscation (unpinned npx, remote install, PS encoded).
+    const sc = classifySupplyChain(seg, tokens, verb);
+    if (sc?.decision === "highrisk") {
+      if (mode === "strict") return { decision: "block", reason: sc.reason + " (strict)", segment: seg };
+      warn = warn || { decision: "warn", reason: sc.reason + " — review before trusting", segment: seg };
+    } else if (sc?.decision === "warn") {
+      warn = warn || { decision: "warn", reason: sc.reason, segment: seg };
+    }
 
     const isDbExec = DB_CLIENTS.test(verb) || /(^|\s)-[ce]\s+['"]/.test(seg) || /--(?:command|execute|eval)\b/.test(seg);
 
