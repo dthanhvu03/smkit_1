@@ -43,6 +43,32 @@ test("frontmatter split", () => {
   assert.equal(body.trim(), "hello world");
 });
 
+// ---- F-10: strict YAML subset rejects unsupported syntax loudly -----------
+test("yaml: unsupported syntax throws YamlError with code+line (no silent wrong data)", () => {
+  const cases = [
+    ["project:\n  name: {a: b}\n", "YAML_UNSUPPORTED_FLOW"],
+    ["agents: [claude]\n", "YAML_UNSUPPORTED_FLOW"],
+    ["project:\n\tname: X\n", "YAML_TAB_INDENT"],
+    ["a: &x 1\n", "YAML_UNSUPPORTED_ANCHOR"],
+    ["note: |\n  hi\n", "YAML_UNSUPPORTED_BLOCK_SCALAR"],
+  ];
+  for (const [txt, code] of cases) {
+    assert.throws(() => parseYaml(txt), (e) => e.name === "YamlError" && e.code === code && e.line >= 1, code);
+  }
+  // supported subset still parses, including empty [] and {}
+  assert.deepEqual(parseYaml("agents:\n  - claude\nempty: []\nobj: {}\n"),
+    { agents: ["claude"], empty: [], obj: {} });
+});
+
+test("build: unsupported YAML fails with no output (F-10)", () => {
+  const tmp = copyKit();
+  writeFileSync(join(tmp, "kit.config.yaml"), "version: 2\nagents: [claude]\nmode: vibe\n");
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /flow collections|YAML/i);
+  assert.ok(!existsSync(join(tmp, "out")), "malformed YAML must write nothing");
+});
+
 // ---- guard matcher --------------------------------------------------------
 test("guard: --force-with-lease is NOT blocked, --force IS", () => {
   assert.ok(!matchesBlock("git push --force-with-lease origin main", DEFAULT_BLOCK));

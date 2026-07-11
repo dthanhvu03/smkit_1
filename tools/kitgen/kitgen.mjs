@@ -45,7 +45,7 @@ function runDoctor() {
   if (!existsSync(cfgPath)) err("Config", "thiếu kit.config.yaml -> chạy: npm run init");
   else {
     try { cfg = parseYaml(readFileSync(cfgPath, "utf8")); }
-    catch (e) { err("Config", `kit.config.yaml không parse được (${e.message}) -> sửa YAML`); }
+    catch (e) { err("Config", `kit.config.yaml không parse được (${e.message}) -> ${e.hint || "sửa YAML"}`); }
   }
   if (cfg) {
     const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR });
@@ -167,7 +167,13 @@ function main() {
     console.error(`No kit.config.yaml in ${PROJECT_DIR}. Run \`smkit init\` there first (or cd into the project).`);
     process.exit(1);
   }
-  const cfg = parseYaml(readFileSync(cfgPath, "utf8"));
+  let cfg;
+  try {
+    cfg = parseYaml(readFileSync(cfgPath, "utf8"));
+  } catch (e) {
+    console.error(`Invalid kit.config.yaml — ${e.message}${e.hint ? ` -> ${e.hint}` : ""}. Nothing was generated.`);
+    process.exit(1);
+  }
 
   // Validate BEFORE touching the filesystem. A bad config must never produce a
   // partial or out-of-bounds generation, so we stop here — no mkdir/rm/write ran yet.
