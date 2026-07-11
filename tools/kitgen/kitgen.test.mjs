@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
+import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -272,4 +273,48 @@ test("guard v2: every decision appended to .kit/audit.log", () => {
   const log = readFileSync(join(tmp, ".kit", "audit.log"), "utf8").trim().split("\n");
   const last = JSON.parse(log[log.length - 1]);
   assert.equal(last.decision, "block");
+});
+
+// ---- P0.1: shared validator + filesystem boundary -------------------------
+const GOODCFG = { version: 2, project: { name: "X" }, mode: "vibe", stack: { profile: "generic" }, agents: ["claude"], outDir: "dist" };
+
+test("validate: healthy config → no errors", () => {
+  const { errors } = validateConfig(GOODCFG, { kitDir: KIT, projectDir: KIT });
+  assert.deepEqual(errors, []);
+});
+test("validate: invalid mode / empty agents / unknown agent → errors", () => {
+  assert.match(validateConfig({ ...GOODCFG, mode: "nope" }, { kitDir: KIT }).errors.join("|"), /mode "nope"/);
+  assert.match(validateConfig({ ...GOODCFG, agents: [] }, { kitDir: KIT }).errors.join("|"), /'agents' rỗng/);
+  assert.match(validateConfig({ ...GOODCFG, agents: ["claude", "foo"] }, { kitDir: KIT }).errors.join("|"), /agent target lạ "foo"/);
+});
+test("validate: nonexistent profile → error (build never falls back silently)", () => {
+  assert.match(validateConfig({ ...GOODCFG, stack: { profile: "laravel-erp" } }, { kitDir: KIT }).errors.join("|"),
+    /stack\.profile "laravel-erp" không tồn tại/);
+});
+test("resolveOutDir: traversal detected via path.relative, sibling-prefix not confused", () => {
+  assert.equal(resolveOutDir("/w/app", "dist").outside, false);
+  assert.equal(resolveOutDir("/w/app", "../../escape").outside, true);
+  assert.equal(resolveOutDir("/w/app", "/etc").outside, true);
+  // "/w/app-backup" must NOT be judged inside "/w/app" (startsWith bug)
+  assert.equal(resolveOutDir("/w/app", "../app-backup").outside, true);
+});
+test("validate: out-of-project outDir → error when projectDir given", () => {
+  const { errors } = validateConfig({ ...GOODCFG, outDir: "../../escape" }, { kitDir: KIT, projectDir: KIT });
+  assert.match(errors.join("|"), /nằm ngoài project/);
+});
+
+test("build: invalid config exits 1 and writes NOTHING (no partial output)", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "mode: vibe", "mode: nope");
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 1);
+  assert.ok(!existsSync(join(tmp, "out")), "no output dir should be created for an invalid config");
+});
+test("build: outDir traversal exits 1 and writes nothing outside project", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "outDir: out", "outDir: ../../ESCAPE_TEST");
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /nằm ngoài project/);
+  assert.ok(!existsSync(join(tmp, "..", "..", "ESCAPE_TEST")), "must not write outside the project");
 });

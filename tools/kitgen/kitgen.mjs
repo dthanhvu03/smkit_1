@@ -9,6 +9,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync } from "node
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
+import { validateConfig } from "./validate.mjs";
 import { buildOutputs, collectRules, collectRoles, collectSkills } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
@@ -21,7 +22,6 @@ const kp = (...s) => join(KIT_DIR, ...s);
 const pp = (...s) => join(PROJECT_DIR, ...s);
 
 // ---- doctor ---------------------------------------------------------------
-const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 const HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" }; // enforce:hook rule.id -> hook file
 const OUTPUT_SECTION = /output format|required output|final output/i;
 
@@ -47,18 +47,9 @@ function runDoctor() {
     catch (e) { err("Config", `kit.config.yaml không parse được (${e.message}) -> sửa YAML`); }
   }
   if (cfg) {
-    if (!cfg.version) warn("Config", "thiếu 'version'");
-    if (!cfg.project?.name) warn("Config", "thiếu 'project.name'");
-    if (!["vibe", "standard", "strict"].includes(cfg.mode))
-      err("Config", `mode "${cfg.mode}" không hợp lệ -> dùng: vibe | standard | strict`);
-    const profile = cfg.stack?.profile;
-    if (!profile || !existsSync(kp("profiles", profile, "profile.yaml")))
-      err("Config", `stack.profile "${profile}" không tồn tại -> xem profiles/`);
-    const agents = Array.isArray(cfg.agents) ? cfg.agents : [];
-    if (!agents.length) err("Config", "'agents' rỗng -> khai báo ít nhất một target");
-    for (const a of agents)
-      if (!KNOWN_AGENTS.includes(a)) err("Config", `agent target lạ "${a}" -> dùng: ${KNOWN_AGENTS.join(", ")}`);
-    if (typeof cfg.outDir !== "string") warn("Config", "'outDir' không phải string -> mặc định 'dist'");
+    const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR });
+    for (const m of warnings) warn("Config", m);
+    for (const m of errors) err("Config", m);
     if (clean("Config")) ok("Config", "kit.config.yaml hợp lệ");
   }
 
@@ -176,6 +167,17 @@ function main() {
     process.exit(1);
   }
   const cfg = parseYaml(readFileSync(cfgPath, "utf8"));
+
+  // Validate BEFORE touching the filesystem. A bad config must never produce a
+  // partial or out-of-bounds generation, so we stop here — no mkdir/rm/write ran yet.
+  const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR });
+  for (const w of warnings) console.error(`WARN: ${w}`);
+  if (errors.length) {
+    console.error(`Invalid kit.config.yaml — nothing was generated (${mode}):`);
+    for (const e of errors) console.error(`  ✖ ${e}`);
+    process.exit(1);
+  }
+
   const outDir = cfg.outDir || "dist";
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
 

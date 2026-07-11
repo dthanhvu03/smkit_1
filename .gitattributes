@@ -1,0 +1,11 @@
+# The generator emits LF and golden files are compared byte-for-byte, so every
+# text file MUST stay LF on every OS. Without this, Windows autocrlf rewrites the
+# working tree to CRLF and the golden snapshot test fails spuriously.
+* text=auto eol=lf
+
+# Belt-and-suspenders for the files the byte-comparison depends on.
+*.md   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.mdc  text eol=lf
