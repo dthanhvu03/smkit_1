@@ -111,6 +111,99 @@ function pathArgs(tokens) {
     !t.startsWith("-") && (/[~/]/.test(t) || /^\.?(env|ssh|aws|gnupg|git)\b/i.test(t)));
 }
 
+// ---- Guard v3: workspace-internal destruction + Windows -------------------
+// The v2 guard only blocked deletes OUTSIDE the workspace; deleting the whole
+// project from inside (`rm -rf .`, `git clean -fdx`, `git checkout -- .`) sailed
+// through. v3 classifies recursive-delete targets by where they point.
+
+// Build/cache dirs that are safe to nuke — deleting them is normal cleanup, so
+// blocking would just make the agent unable to do its job.
+const BUILD_WHITELIST = new Set([
+  "dist", "build", "out", "output", ".next", ".nuxt", ".svelte-kit", ".output",
+  "node_modules", "coverage", ".cache", ".turbo", ".parcel-cache", ".vercel",
+  "tmp", "temp", ".tmp",
+]);
+// Targets that mean "everything here" → deleting them wipes the project.
+const WHOLE_TREE = new Set([".", "./", ".\\", "*", "./*", ".\\*", "", "/", "~", "~/"]);
+
+// Classify ONE delete target: block (root/protected/outside), warn (a real subdir
+// inside the workspace), or allow (a whitelisted build dir).
+function classifyDeleteTarget(t, projDir) {
+  const raw = t.replace(/^["']|["']$/g, "");
+  if (WHOLE_TREE.has(raw)) return "block";
+  const norm = raw.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (norm === "" || norm === ".") return "block";
+  if (/(^|\/)\.git(\/|$)/.test(norm)) return "block";
+  const tier = pathTier(raw, projDir);
+  if (tier === "zeroAccess" || tier === "outsideWorkspace") return "block";
+  const base = norm.split("/").pop();
+  if (BUILD_WHITELIST.has(base)) return "allow";
+  return "warn";
+}
+
+// Worst decision across a delete command's targets (block > warn > allow).
+function worstTarget(targets, projDir, phrase) {
+  let worst = "allow", culprit = "";
+  for (const t of targets) {
+    const c = classifyDeleteTarget(t, projDir);
+    if (c === "block") return { decision: "block", reason: `${phrase} "${t}" (workspace root or protected path)` };
+    if (c === "warn" && worst === "allow") { worst = "warn"; culprit = t; }
+  }
+  return worst === "warn" ? { decision: "warn", reason: `${phrase} "${culprit}" inside the workspace` } : null;
+}
+
+const hasFlag = (tokens, re) => tokens.some((t) => re.test(t));
+
+// Detect a destructive command that operates INSIDE the workspace. Returns
+// {decision, reason} or null. String-level (matches the guard's tokenize model),
+// covering POSIX and Windows verbs even though the hook binds the Bash tool.
+export function classifyDestructive(seg, tokens, verb, projDir = projectDir) {
+  const v = (verb || "").toLowerCase();
+  const rest = tokens.slice(1);
+
+  if (v === "rm" && (hasFlag(tokens, /^-[a-z]*r/i) || tokens.includes("--recursive"))) {
+    const targets = rest.filter((t) => !t.startsWith("-"));
+    return worstTarget(targets.length ? targets : ["."], projDir, "recursively deletes");
+  }
+
+  if (v === "git") {
+    const sub = tokens[1];
+    if (sub === "clean" && hasFlag(tokens, /^-[a-z]*f/i) && hasFlag(tokens, /^-[a-z]*d/i))
+      return { decision: "block", reason: "git clean removes untracked files and directories" };
+    if (sub === "checkout" && tokens.includes("--")) {
+      const targets = tokens.slice(tokens.indexOf("--") + 1);
+      return worstTarget(targets.length ? targets : ["."], projDir, "git checkout discards local changes in");
+    }
+    if (sub === "restore") {
+      const targets = rest.slice(1).filter((t) => !t.startsWith("-"));
+      return worstTarget(targets.length ? targets : ["."], projDir, "git restore discards local changes in");
+    }
+  }
+
+  if (v === "find" && (/(^|\s)-delete\b/.test(seg) || /-exec\s+rm\b/.test(seg)))
+    return { decision: "block", reason: "find deletes matched files" };
+
+  if (/\bprisma\b/.test(seg) && /\bmigrate\s+reset\b/.test(seg))
+    return { decision: "block", reason: "prisma migrate reset drops and recreates the database" };
+  if (/\bartisan\b/.test(seg) && /\bmigrate:(fresh|refresh)\b/.test(seg))
+    return { decision: "block", reason: "artisan migrate:fresh/refresh drops all tables" };
+
+  // Windows destructive verbs (defense-in-depth; the hook binds Bash but these may
+  // still appear via pwsh/cmd wrappers).
+  if (v === "remove-item" || v === "ri") {
+    if (hasFlag(tokens, /^-recurse/i)) {
+      const targets = rest.filter((t) => !t.startsWith("-"));
+      return worstTarget(targets.length ? targets : ["."], projDir, "Remove-Item recursively deletes");
+    }
+  }
+  if (v === "del" || v === "erase" || v === "rmdir" || v === "rd") {
+    const targets = rest.filter((t) => !t.startsWith("-") && !/^\/[a-z]$/i.test(t));
+    return worstTarget(targets.length ? targets : ["."], projDir, `${v} deletes`);
+  }
+
+  return null;
+}
+
 // Classify a full command → {decision: block|warn|allow, reason, segment}.
 export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, projDir = projectDir } = {}) {
   const segs = splitSegments(cmd);
@@ -123,6 +216,12 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
   for (const seg of segs) {
     const tokens = tokenize(seg);
     const verb = (tokens[0] || "").split("/").pop(); // strip path prefix e.g. /bin/rm
+
+    // Guard v3: workspace-internal destruction (rm -rf ., git clean, Windows, …).
+    const destr = classifyDestructive(seg, tokens, verb, projDir);
+    if (destr?.decision === "block") return { ...destr, segment: seg };
+    if (destr?.decision === "warn") warn = warn || { ...destr, segment: seg };
+
     const isDbExec = DB_CLIENTS.test(verb) || /(^|\s)-[ce]\s+['"]/.test(seg) || /--(?:command|execute|eval)\b/.test(seg);
 
     for (const pat of block) {

@@ -210,6 +210,36 @@ test("guard v2: splitSegments respects quotes", () => {
   assert.deepEqual(splitSegments('echo "a; b" && ls'), ['echo "a; b"', "ls"]);
 });
 
+// ---- guard v3: workspace-internal destruction + Windows (F-01/F-05/F-06) --
+const dw = (cmd) => classifyCommand(cmd, { projDir: "/w/app" }).decision;
+
+test("guard v3: deleting the whole workspace is blocked", () => {
+  for (const c of ["rm -rf .", "rm -rf ./", "rm -rf .git", "git clean -fdx", "git clean -fd",
+    "git checkout -- .", "git restore .", "find . -type f -delete", "find . -exec rm {} ;"])
+    assert.equal(dw(c), "block", c);
+});
+test("guard v3: destructive framework migrations blocked", () => {
+  assert.equal(dw("prisma migrate reset --force"), "block");
+  assert.equal(dw("php artisan migrate:fresh"), "block");
+  assert.equal(dw("php artisan migrate"), "allow");
+});
+test("guard v3: Windows recursive deletes blocked; scoped ones handled", () => {
+  assert.equal(dw("Remove-Item -Recurse -Force ."), "block");
+  assert.equal(dw("rmdir /s /q ."), "block");
+  assert.equal(dw("del /s /q *"), "block");
+  assert.equal(dw("Remove-Item -Recurse -Force dist"), "allow"); // whitelisted build dir
+});
+test("guard v3: subdir delete warns; whitelisted build dirs allowed; legit cmds allowed", () => {
+  assert.equal(dw("rm -rf src"), "warn");
+  assert.equal(dw("git checkout -- src/app.ts"), "warn");
+  assert.equal(dw("rm -rf dist"), "allow");
+  assert.equal(dw("rm -rf node_modules"), "allow");
+  assert.equal(dw("rm -rf ./build"), "allow");
+  assert.equal(dw("git clean -n"), "allow"); // dry-run
+  assert.equal(dw("git checkout main"), "allow"); // switch branch
+  assert.equal(dw("npm run build"), "allow");
+});
+
 // ---- distribution: self-contained install (P1) ----------------------------
 test("dist: init into an empty project → self-contained + hook runs without tools/", () => {
   const proj = mkdtempSync(join(tmpdir(), "kit-proj-"));
