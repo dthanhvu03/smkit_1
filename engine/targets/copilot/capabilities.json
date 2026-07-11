@@ -2,10 +2,10 @@
   "id": "copilot",
   "displayName": "GitHub Copilot",
   "verification": {
-    "status": "unverified",
-    "verifiedAt": null,
-    "sourceType": "in-repo-usage",
-    "note": "applyTo instructions format not re-confirmed against current official docs (CHƯA XÁC MINH)."
+    "status": "partial",
+    "verifiedAt": "2026-07-11",
+    "sourceType": "official-documentation",
+    "note": "Agent Skills support (.github/skills, .claude/skills, .agents/skills) verified via docs.github.com/en/copilot/concepts/agents/about-agent-skills (2026-07-11). applyTo instructions format still CHƯA XÁC MINH."
   },
   "artifacts": [
     ".github/copilot-instructions.md",
@@ -14,7 +14,7 @@
   "features": {
     "globalInstructions": "native",
     "pathScopedRules": "supported",
-    "skills": "unsupported",
+    "skills": "supported",
     "commands": "unsupported",
     "hooks": "unsupported",
     "hardBlock": "unsupported",
@@ -23,9 +23,13 @@
     "progressiveDisclosure": "pathScoped",
     "transactionalGeneration": "kit-owned",
     "driftDetection": "kit-owned",
-    "ownershipManifest": "kit-owned"
+    "ownershipManifest": "kit-owned",
+    "invocationControl": "unknown",
+    "pathGatedSkillActivation": "unknown"
   },
   "limitations": [
-    "Repo-wide instructions + applyTo scoped instructions only; no commands/skills/hooks."
+    "Repo-wide instructions + applyTo scoped instructions only; no commands/hooks.",
+    "Kit does not yet emit skills to a Copilot-specific path (.github/skills) — verified as a target capability, not yet wired into the emitter.",
+    "invocationControl/pathGatedSkillActivation CHƯA XÁC MINH."
   ]
 }

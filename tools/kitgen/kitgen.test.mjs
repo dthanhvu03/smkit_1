@@ -4,6 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, relative } from "node:path";
@@ -489,12 +490,42 @@ test("governance: T3/T4 must be manual-only + content-hashed, else build fails w
   assert.ok(!existsSync(join(tmp, "out")), "no output for a skill that violates its trust tier");
 });
 
-test("governance: T3 manual-only + contentHash passes; build succeeds", () => {
+// Mirrors computeSkillContentHash's scope exactly (SKILL.md only, no supporting files)
+// so tests can declare a hash that is provably correct, not a placeholder.
+function skillMdHash(md) { return createHash("sha256").update(md, "utf8").digest("hex"); }
+
+test("governance: T3 manual-only + a CORRECT contentHash passes; build succeeds", () => {
   const tmp = copyKit();
-  writeSkill(tmp, "risky-ok", "---\nname: risky-ok\ndescription: Use when risky but pinned.\n---\n\n# x\n",
-    "schemaVersion: 1\nid: risky-ok\ntrustTier: T3\ninvocation:\n  implicit: false\n  manual: true\nprovenance:\n  contentHash: \"abc123\"\n");
+  const md = "---\nname: risky-ok\ndescription: Use when risky but pinned.\n---\n\n# x\n";
+  writeSkill(tmp, "risky-ok", md,
+    `schemaVersion: 1\nid: risky-ok\ntrustTier: T3\ninvocation:\n  implicit: false\n  manual: true\nprovenance:\n  contentHash: "sha256:${skillMdHash(md)}"\n`);
   assert.deepEqual(validateSkillGovernance(tmp).errors, []);
   assert.equal(runKit(tmp, "build").status, 0);
+});
+
+test("governance: contentHash format must be \"sha256:<hex>\"/\"sha512:<hex>\" — a bare placeholder is rejected", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "bad-format", "---\nname: bad-format\ndescription: Use when demoing.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: bad-format\ntrustTier: T3\ninvocation:\n  implicit: false\nprovenance:\n  contentHash: \"abc123\"\n");
+  assert.match(validateSkillGovernance(tmp).errors.join("|"), /\[SKILL_HASH_FORMAT_INVALID\]/);
+});
+
+test("governance: contentHash hex length must match its declared algorithm", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "short-hash", "---\nname: short-hash\ndescription: Use when demoing.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: short-hash\ntrustTier: T3\ninvocation:\n  implicit: false\nprovenance:\n  contentHash: \"sha256:deadbeef\"\n");
+  assert.match(validateSkillGovernance(tmp).errors.join("|"), /\[SKILL_HASH_ALGO_LENGTH_MISMATCH\]/);
+});
+
+test("governance: contentHash must match the skill's ACTUAL content — a stale/tampered pin is rejected", () => {
+  const tmp = copyKit();
+  const md = "---\nname: tampered\ndescription: Use when demoing.\n---\n\n# x\n";
+  // Declare the hash of a DIFFERENT string than what's on disk — simulates content
+  // edited after pinning (or a tampered local copy).
+  const wrongHash = skillMdHash(md + "\nEDITED AFTER PINNING\n");
+  writeSkill(tmp, "tampered", md,
+    `schemaVersion: 1\nid: tampered\ntrustTier: T3\ninvocation:\n  implicit: false\nprovenance:\n  contentHash: "sha256:${wrongHash}"\n`);
+  assert.match(validateSkillGovernance(tmp).errors.join("|"), /\[SKILL_HASH_MISMATCH\]/);
 });
 
 test("governance: preApprovedTools contradicting deniedTools or unrequested tools is rejected", () => {
@@ -509,12 +540,62 @@ test("governance: preApprovedTools contradicting deniedTools or unrequested tool
   assert.match(validateSkillGovernance(tmp2).errors.join("|"), /không nằm trong requestedTools/);
 });
 
-test("governance: long or vague description warns (doctor-visible), does not block build", () => {
+// ---- description length: spec 1024 (ERROR) vs Claude listing 1536 (WARNING) ------
+test("governance: description at the 1024 spec limit passes; 1025 is a spec ERROR", () => {
+  const tmp1 = copyKit();
+  const d1024 = "Use when testing the boundary. " + "x".repeat(1024 - "Use when testing the boundary. ".length);
+  assert.equal(d1024.length, 1024);
+  writeSkill(tmp1, "at-limit", `---\nname: at-limit\ndescription: ${d1024}\n---\n\n# x\n`);
+  assert.deepEqual(validateSkillGovernance(tmp1).errors, []);
+
+  const tmp2 = copyKit();
+  const d1025 = d1024 + "x";
+  writeSkill(tmp2, "over-limit", `---\nname: over-limit\ndescription: ${d1025}\n---\n\n# x\n`);
+  assert.match(validateSkillGovernance(tmp2).errors.join("|"), /\[SKILL_DESCRIPTION_TOO_LONG\]/);
+});
+
+test("governance: description+when_to_use at 1536 passes; 1537 is a Claude-listing WARNING (not an error)", () => {
+  const tmp1 = copyKit();
+  const desc = "Use when testing. " + "x".repeat(500);
+  const wtu1 = "y".repeat(1536 - desc.length);
+  writeSkill(tmp1, "listing-ok", `---\nname: listing-ok\ndescription: ${desc}\nwhen_to_use: ${wtu1}\n---\n\n# x\n`);
+  const r1 = validateSkillGovernance(tmp1);
+  assert.ok(!r1.warnings.some((w) => w.includes("SKILL_DESCRIPTION_LISTING_TOO_LONG")), "1536 combined must not warn");
+  assert.deepEqual(r1.errors, []);
+
+  const tmp2 = copyKit();
+  const wtu2 = wtu1 + "y";
+  writeSkill(tmp2, "listing-over", `---\nname: listing-over\ndescription: ${desc}\nwhen_to_use: ${wtu2}\n---\n\n# x\n`);
+  const r2 = validateSkillGovernance(tmp2);
+  assert.match(r2.warnings.join("|"), /\[SKILL_DESCRIPTION_LISTING_TOO_LONG\]/, "1537 combined must warn");
+  assert.deepEqual(r2.errors, [], "listing overflow is a WARNING, never a build-blocking error");
+});
+
+// ---- trigger-cue heuristic: multilingual, weak signal only --------------------
+test("governance: trigger heuristic recognizes Vietnamese cues, not just English", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "vi-trigger", "---\nname: vi-trigger\ndescription: Dùng khi cần kiểm tra bảo mật trước khi release.\n---\n\n# x\n");
+  const r = validateSkillGovernance(tmp);
+  assert.ok(!r.warnings.some((w) => w.includes("SKILL_DESCRIPTION_TRIGGER_WEAK")), "a Vietnamese trigger cue must not be flagged weak");
+});
+
+test("governance: a description with no trigger cue in any supported language warns (heuristic, non-blocking)", () => {
   const tmp = copyKit();
   writeSkill(tmp, "vague", "---\nname: vague\ndescription: Does stuff sometimes maybe.\n---\n\n# x\n");
   const r = validateSkillGovernance(tmp);
-  assert.match(r.warnings.join("|"), /thiếu cue/);
+  assert.match(r.warnings.join("|"), /\[SKILL_DESCRIPTION_TRIGGER_WEAK\]/);
   assert.equal(runKit(tmp, "build").status, 0, "a vague description warns but does not fail the build");
+});
+
+// ---- unsupported-target capability checks (invocation control, path-gated activation) ----
+test("governance: manual-only skill targeted at a capability-unverified target warns, never silently drops", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "manual-strict", "---\nname: manual-strict\ndescription: Use when doing a strict manual workflow.\n---\n\n# x\n",
+    "schemaVersion: 1\nid: manual-strict\ninvocation:\n  implicit: false\n  manual: true\n");
+  editFile(join(tmp, "kit.config.yaml"), "  - claude", "  - claude\n  - cursor");
+  const w = collectBuildWarnings(tmp, { agents: ["claude", "cursor"] });
+  assert.ok(w.some((x) => x.code === "SKILL_INVOCATION_CONTROL_UNSUPPORTED_TARGET" && x.target === "cursor"),
+    `expected an unsupported-target warning for cursor; got: ${JSON.stringify(w)}`);
 });
 
 test("skills: metadata must be string→string — nested value dropped with a warning", () => {

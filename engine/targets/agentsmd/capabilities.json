@@ -22,7 +22,9 @@
     "progressiveDisclosure": "none",
     "transactionalGeneration": "kit-owned",
     "driftDetection": "kit-owned",
-    "ownershipManifest": "kit-owned"
+    "ownershipManifest": "kit-owned",
+    "invocationControl": "unsupported",
+    "pathGatedSkillActivation": "unsupported"
   },
   "limitations": [
     "Whole-file only: no path scoping, no policy enforcement. Interoperability, not a policy engine."

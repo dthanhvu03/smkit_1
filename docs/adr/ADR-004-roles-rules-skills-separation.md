@@ -1,9 +1,12 @@
 # ADR-004 — Roles, Rules, Skills & Commands are four distinct abstractions
 
-- **Status:** Accepted (2026-07-11). **Skill layer implemented** (two-layer `SKILL.md` +
-  `skill.kit.yaml`, standard-compliant emitter, backward-compat migration, drop-warnings —
-  see `engine/emitter.mjs`, the 6 migrated `engine/skills/*`, and the skill tests). Role
-  and Rule schema changes remain design-only / deferred.
+- **Status:** Accepted (2026-07-11). **Skill layer implemented and hardened** (two-layer
+  `SKILL.md` + `skill.kit.yaml`, standard-compliant emitter, backward-compat migration,
+  drop-warnings, spec-accurate description limits, multilingual trigger heuristic,
+  cryptographically-verified content pinning for high-risk trust tiers, per-target
+  capability warnings for invocation control and Claude's `paths` overlay — see
+  `engine/emitter.mjs`, the 6 migrated `engine/skills/*`, and 73 passing tests). Role and
+  Rule schema changes remain design-only / deferred.
 - **Context:** Research in
   [`docs/research/2026-07-11-roles-rules-skills-architecture.md`](../research/2026-07-11-roles-rules-skills-architecture.md)
   verified the current abstractions against live standards (agents.md, agentskills.io,
@@ -31,12 +34,22 @@
      requested/denied/pre-approved tools, network/executable flags, supported targets)
      lives in a **sidecar `skill.kit.yaml`** with its own `schemaVersion`, validated
      strictly by the kit and **never emitted into `SKILL.md`**.
-   - The non-standard `id`, `paths`, `related_roles`, `related_rules` fields are removed
-     from `SKILL.md`: `id`→directory name, `related_*`→sidecar, and **`paths` is never
-     used on a skill** — path scoping is a Rule concept (model a "only when editing
-     migrations" need as a Rule that recommends the skill, not a glob on the skill).
-     Putting nested governance structures under `metadata:` would violate the spec and is
-     explicitly rejected.
+   - The non-standard `id`, `related_roles`, `related_rules` fields are removed from
+     `SKILL.md` (`id`→directory name, `related_*`→sidecar). Putting nested governance
+     structures under `metadata:` would violate the spec and is explicitly rejected.
+   - **`paths` is NOT part of the Agent Skills open standard** (activation there is
+     description-based) — the **canonical/portable Skill contract never depends on
+     `paths`**. However, Claude Code **verified 2026-07-11** supports `paths` as a
+     documented **vendor-specific extension**: "Glob patterns that limit when this skill
+     is activated… Claude loads the skill automatically only when working with files
+     matching the patterns. Uses the same format as path-specific rules"
+     (code.claude.com/docs/en/skills). The kit models this as a **target overlay**: a
+     skill's portable `SKILL.md` never carries `paths`, but its `skill.kit.yaml` sidecar
+     may declare `activation.claude.paths` — a Claude-only activation gate that the
+     Claude emitter re-adds as `paths:` frontmatter. Other targets get no equivalent
+     (warned, not silently dropped, if declared and the target's capability is
+     unconfirmed). A trivial "matches everything" pattern (`**/*`, `**`, `*`) is a no-op
+     and is not carried into the overlay at all.
 3. **Rules must declare `activation` and `enforcement.type`.** `enforcement.type ∈
    {guidance, static-check, hook, ci, permission, sandbox, unsupported}`. A Rule expressed
    in Markdown is `guidance` by default and **must not claim to be hard-enforced**; when

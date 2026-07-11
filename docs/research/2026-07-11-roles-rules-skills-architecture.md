@@ -159,39 +159,57 @@ related_roles, related_rules}`. Emitted to Claude `.claude/skills/<id>/SKILL.md`
 - Portable across a large client set (Claude Code, Codex, Gemini CLI, Cursor, Copilot/
   VS Code, Goose, OpenCode, Roo, Factory, Kiro, Amp, …). Spec: agentskills.io/specification.
 
+**Verified Agent Skills open-spec constraints** (*agentskills.io/specification,
+2026-07-11*): `name` **required**, ≤64 chars, lowercase alnum+hyphen, no leading/trailing/
+double hyphen, **must equal the parent directory**. `description` **required, non-empty,
+≤1024 characters** (a spec violation, not a Claude-only concern). `metadata` is a
+string→string map. `allowed-tools` is space-separated and **experimental** ("support may
+vary between agent implementations"). `compatibility` ≤500 chars.
+
 **Verified Claude Code skill frontmatter** (*code.claude.com/docs/en/skills, 2026-07-11*):
-`name` (optional; display), `description` (recommended; combined with `when_to_use`
-truncated at **1,536 characters** in the listing), `when_to_use`, `disable-model-invocation`
+`name` (optional; display — defaults to directory), `description`, `when_to_use`
+(**the combined `description`+`when_to_use` text is truncated at 1,536 characters in
+Claude's skill listing** — a Claude UX/token-budget concern, layered ON TOP of the spec's
+1024-char `description` limit, not a replacement for it), `disable-model-invocation`
 (bool — manual-only; also blocks subagent preload & scheduled-task use),
-`user-invocable` (bool — hide from `/` menu), `allowed-tools` (no-ask tools while active),
-`disallowed-tools` (removed from pool while active), `effort` (low..max). Discovery levels:
-personal `~/.claude/skills/`, project `.claude/skills/`, plugin `<plugin>/skills/`;
-precedence **enterprise > personal > project**, skill overrides bundled, plugin namespaced;
-nested monorepo skills load on demand; symlinks followed (loaded once).
+`user-invocable` (bool — hide from `/` menu), `allowed-tools` (no-ask tools while active,
+does NOT remove other tools from the pool), `disallowed-tools` (removed from pool while
+active), `effort` (low..max), and **`paths`** — glob patterns that gate automatic
+activation to matching files, "same format as path-specific rules" (a verified **Claude
+vendor extension**, NOT part of the open standard). Discovery levels: personal
+`~/.claude/skills/`, project `.claude/skills/`, plugin `<plugin>/skills/`; precedence
+**enterprise > personal > project**, skill overrides bundled, plugin namespaced; nested
+monorepo skills load on demand; symlinks followed (loaded once).
 
 **Key divergences (kit → standard):**
 | Kit field | Standard? | Verdict |
 |---|---|---|
 | `id` | no | drop; the **directory name** is the identity/command name |
-| `name` | yes | keep (display) |
-| `description` | yes | keep; enforce ≤~1,536 chars, "use when / not when" |
-| `paths` | **no** (skills are not path-scoped) | **remove** — this is a Rule concept |
-| `related_roles` / `related_rules` | no | move under `metadata:` (kit-owned), non-standard |
-| — | `allowed-tools` | **add** (portable capability declaration) |
-| — | `metadata.version` / `license` | **add** (provenance) |
+| `name` | yes | keep (display); must equal directory, ≤64 chars, lowercase-hyphen |
+| `description` | yes | keep; **≤1024 chars is a spec ERROR**, not just a style nit |
+| `paths` | **not open-standard**, but a **verified Claude vendor extension** | keep OUT of portable `SKILL.md`; supported only via a Claude-only overlay in `skill.kit.yaml` (`activation.claude.paths`), re-added by the Claude emitter — never a Rule substitute on other targets, never silently dropped when declared |
+| `related_roles` / `related_rules` | no | move to `skill.kit.yaml` sidecar (kit-owned), non-standard |
+| — | `allowed-tools` | **add** (portable capability declaration; pre-approval hint, not a deny boundary) |
+| — | `skill.kit.yaml` (trust tier, provenance/hash, permissions) | **add** — kept OUT of `SKILL.md`'s `metadata:`, which the spec restricts to string→string |
 
 **Answers to §4.C (abridged, verified where marked):** standard fields = name+description
-(*verified*); vendor extensions = Claude's `disable-model-invocation/user-invocable/
-allowed-tools/disallowed-tools/effort` (*verified*). Metadata always loaded = name+desc
-(*verified*). Full body on activation; resources on execution (*verified*). Scripts are
-**read or executed depending on the agent + tool permissions** — executing bundled scripts
-is a real trust boundary. Implicit invocation = yes (model-decision) unless
-`disable-model-invocation`; manual = `/name`. Tool dependency declared via `allowed-tools`;
-network/consent/trust = **not in the base standard** → kit-owned metadata needed. `.agents/
-skills/` = an emerging cross-tool discovery path (Codex/Gemini) — **partial**. Name clash
-handling = per §5 verified precedence (Claude). Registry/plugin distribution = Claude
-plugins + marketplaces; validation tooling = agentskills.io references a spec + quickstart
-(*partial*). Size limit = description 1,536-char listing cap (*verified*); body size = soft.
+(*verified*, with hard length/format constraints — not just recommendations). Vendor
+extensions = Claude's `disable-model-invocation/user-invocable/allowed-tools/
+disallowed-tools/effort/when_to_use/paths` (*verified*). Metadata always loaded =
+name+description (*verified*). Full body on activation; resources on execution
+(*verified*). Scripts are **read or executed depending on the agent + tool permissions**
+— executing bundled scripts is a real trust boundary, which is why the kit's governance
+sidecar requires a verified content hash before a high-risk skill may run any script.
+Implicit invocation = yes (model-decision) unless `disable-model-invocation`; manual =
+`/name`. Tool dependency declared via `allowed-tools`; network/consent/trust/provenance =
+**not in the base standard** → kit-owned `skill.kit.yaml` fields. `.agents/skills/` = an
+emerging cross-tool discovery path (Codex/Gemini) — **partial**. Name clash handling =
+per §5 verified precedence (Claude). Registry/plugin distribution = Claude plugins +
+marketplaces; validation tooling = the `skills-ref` reference library (agentskills.io/
+specification → github.com/agentskills/agentskills) — **verified to exist**, not run by
+this kit yet. Size limits = description **≤1024 (spec, hard)**; Claude listing
+(description+when_to_use) **≤1536 (Claude UX, soft)**; body ≤500 lines recommended
+(*verified*, soft).
 
 ## 6. Command / workflow distinction
 
@@ -254,7 +272,10 @@ Values: `SUPPORTED` · `PARTIAL` · `UNSUPPORTED` · `VENDOR-SPECIFIC` · `KIT-O
 | Validation / security scan | PARTIAL (spec) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | **KIT-OWNED (doctor)** |
 
 **Source notes:** Claude Code skills/subagents + "commands merged into skills" + precedence
-+ 1,536-char cap = **verified** (code.claude.com/docs/en/skills, /sub-agents, 2026-07-11).
++ the 1,536-char Claude listing cap + the verified `paths` vendor extension = **verified**
+(code.claude.com/docs/en/skills, /sub-agents, 2026-07-11). The 1,024-char `description`
+spec limit + `name` format rules + string→string `metadata` = **verified**
+(agentskills.io/specification, 2026-07-11).
 Agent Skills standard + client list (Codex/Gemini/Cursor/Copilot/VS Code support) =
 **verified** (agentskills.io, 2026-07-11). AGENTS.md = **verified** (agents.md, 2026-07-11).
 Cursor `.mdc` rules, Windsurf activation modes, Copilot `applyTo`, Gemini GEMINI.md =
@@ -281,7 +302,7 @@ rule/subagent pages not re-read today). Everything marked CHƯA XÁC MINH needs 
 |---|---|---|
 | Role descriptions (catalog) | always (delegation menu) | ≤ ~1 line each, ≤ ~1.5 KB total |
 | Rule metadata | always for always-on; else on activation | always-on rules **< 200 lines total** (kit design doc target) |
-| Skill catalog (name+desc) | always | ≤ 1,536 chars per skill (Claude cap, verified) |
+| Skill catalog (name+desc) | always | description ≤1024 chars (spec, hard); combined description+when_to_use ≤1536 chars (Claude listing, soft) |
 | Full role prompt | on delegation | unbounded but focused |
 | Full rule body | on activation (path/glob) | keep scoped bodies small |
 | Full SKILL.md | on activation | soft cap; move detail to `references/` |
@@ -461,15 +482,31 @@ tier gate). (10) target lacks a canonical field → **emitter warns, never silen
 - Roles that plan + implement + review + approve their own work ("senior-developer").
 - Two roles/skills with different names, same responsibility.
 - A role whose `tools` exceed its job (e.g. reviewer with Write/Bash).
-- `paths:` on a skill (category error — that's a rule).
+- `paths:` in the PORTABLE `SKILL.md` (category error — that's a Rule concept, or at most
+  a Claude-only overlay field in `skill.kit.yaml`, never a top-level SKILL.md key).
 - Skill `description` that is long/vague → poisons skill selection and wastes context.
 - Rule Markdown claiming to be "enforced"/"blocking" without a hook/CI backing.
 - Command duplicated as a separate Skill with the same name on Claude (they collide).
 - Copying a third-party skill without provenance/hash (untracked supply chain).
+- A high-risk-tier (T3/T4) skill that still auto-invokes or has no verified content hash
+  (implemented: `validateSkillGovernance` rejects this before generation).
 
-## 16. Doctor & validation requirements (proposed)
+## 16. Doctor & validation requirements (implemented where noted, else proposed)
 
-- skill `description` too long (> ~1,536 chars) or too vague (no "use when").
+- skill `description` >1024 chars → **ERROR** (spec violation) *(implemented)*.
+- skill description+when_to_use >1536 chars → **WARNING** (Claude listing truncation)
+  *(implemented)*.
+- skill/name not matching Agent Skills' lowercase-hyphen format or directory name
+  *(implemented)*.
+- weak trigger cue in description/when_to_use, multilingual heuristic → WARNING
+  *(implemented)*.
+- T3/T4 skill not manual-only, missing/malformed/mismatched content hash → **ERROR**
+  *(implemented — format, algorithm/length, and actual-content verification, not just
+  field presence)*.
+- self-contradictory permissions (pre-approved+denied, pre-approved+unrequested) → ERROR
+  *(implemented)*.
+- manual-only invocation or Claude-only path-gated activation declared for a target with
+  unconfirmed support → WARNING, never silent *(implemented)*.
 - overlapping skill triggers (two skills match the same description space).
 - role description missing delegation cue ("Use when…").
 - always-on rule body too long (> N lines).

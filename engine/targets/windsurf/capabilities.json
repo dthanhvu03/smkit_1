@@ -2,10 +2,10 @@
   "id": "windsurf",
   "displayName": "Windsurf",
   "verification": {
-    "status": "unverified",
-    "verifiedAt": null,
-    "sourceType": "in-repo-usage",
-    "note": "Modern trigger/globs frontmatter (not legacy XML) not re-confirmed against current official docs (CHƯA XÁC MINH)."
+    "status": "partial",
+    "verifiedAt": "2026-07-11",
+    "sourceType": "official-documentation",
+    "note": "Skills (.windsurf/skills/ + .agents/skills/ discovery; Skills/Rules/Workflows kept as three separate runtime concepts) verified via docs.windsurf.com/windsurf/cascade/skills (2026-07-11). Modern trigger/globs rule frontmatter still CHƯA XÁC MINH."
   },
   "artifacts": [
     ".windsurf/rules/*.md"
@@ -13,7 +13,7 @@
   "features": {
     "globalInstructions": "native",
     "pathScopedRules": "supported",
-    "skills": "unsupported",
+    "skills": "supported",
     "commands": "unsupported",
     "hooks": "unsupported",
     "hardBlock": "unsupported",
@@ -22,9 +22,14 @@
     "progressiveDisclosure": "globScoped",
     "transactionalGeneration": "kit-owned",
     "driftDetection": "kit-owned",
-    "ownershipManifest": "kit-owned"
+    "ownershipManifest": "kit-owned",
+    "invocationControl": "unknown",
+    "pathGatedSkillActivation": "unknown"
   },
   "limitations": [
-    "trigger: glob / always_on frontmatter; legacy .windsurfrules XML intentionally not used."
+    "trigger: glob / always_on frontmatter; legacy .windsurfrules XML intentionally not used.",
+    "Windsurf keeps Skills, Rules and Workflows as three distinct runtime concepts — the kit's `commands/` maps most naturally to Workflows, not yet wired into the emitter.",
+    "Kit does not yet emit skills to .windsurf/skills — verified as a target capability, not yet wired into the emitter.",
+    "invocationControl/pathGatedSkillActivation CHƯA XÁC MINH."
   ]
 }

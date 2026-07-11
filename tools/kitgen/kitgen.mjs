@@ -137,9 +137,9 @@ function runDoctor() {
     if (!s.description) warn("Skills", `skill ${id} thiếu description`);
     if (!OUTPUT_SECTION.test(s.body)) warn("Skills", `skill ${id} thiếu mục output format`);
   }
-  // Skill schema / migration warnings (name!=dir, non-standard paths/related_*, bad metadata).
-  for (const w of collectBuildWarnings(KIT_DIR))
-    warn("Skills", `${w.field} @ ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`, "SKILL_SCHEMA");
+  // Skill schema / migration / target-capability warnings — each carries its own code.
+  for (const w of collectBuildWarnings(KIT_DIR, cfg || {}))
+    warn("Skills", `[${w.target}] ${w.field} @ ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`, w.code || "SKILL_SCHEMA");
   if (clean("Skills")) ok("Skills", "code-review, refactor, test-design");
 
   // 8. Roles
@@ -162,7 +162,7 @@ function runDoctor() {
     const sevOf = { ok: "info", warn: "warning", error: "error" };
     const results = R
       .map((r) => ({ group: r.g, severity: sevOf[r.level], code: r.code || null, message: redactSecrets(r.m) }))
-      .sort((a, b) => `${a.group} ${a.code} ${a.message}`.localeCompare(`${b.group} ${b.code} ${b.message}`));
+      .sort((a, b) => a.group.localeCompare(b.group) || String(a.code).localeCompare(String(b.code)) || a.message.localeCompare(b.message));
     process.stdout.write(JSON.stringify({
       schemaVersion: 1,
       tool: "smkit-doctor",
@@ -218,7 +218,7 @@ function main() {
 
   const outDir = cfg.outDir || "dist";
   // Surface skill schema / capability-drop warnings (never silent).
-  for (const w of collectBuildWarnings(KIT_DIR))
+  for (const w of collectBuildWarnings(KIT_DIR, cfg))
     console.error(`WARN [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
 
