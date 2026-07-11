@@ -6,7 +6,7 @@
 
 AI coding agents drift: each session they re-decide structure, invent a second way to do things, and can run dangerous commands. This kit fixes that **without requiring you to know code or architecture**:
 
-- 🛡️ **Guardrails always on** — destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, …) are blocked in every mode.
+- 🛡️ **Guardrails always on** — destructive commands (`rm -rf .`, `git push --force`, `git clean -fdx`, `DROP TABLE`, …) are caught by a `PreToolUse` hook in every mode: the clearly-catastrophic ones are blocked, riskier-but-sometimes-legitimate ones warn, and build/cache dirs stay deletable. This is **defense-in-depth against honest agent mistakes, not a security sandbox** — a determined bypass (env-var indirection, a wrapper script) can still get through, so run untrusted agents inside an OS sandbox. See [`docs/kit-refactor/06-P1-guard-v2-design.md`](docs/kit-refactor/06-P1-guard-v2-design.md) for the exact boundary.
 - 🧭 **Stays consistent** — the AI reads your project's **Constitution** and **Decision Log** at the start of every session and must follow them.
 - 🎚️ **Three modes** — `vibe` (fast, plain language, minimal ceremony) → `standard` → `strict` (full review + human approval). One setting.
 - 🔌 **One source, many tools** — edit once; generate `CLAUDE.md`, `.claude/*`, and `.cursor/rules/*` with no drift.
@@ -51,6 +51,7 @@ CLAUDE.md · .claude/{rules,agents,settings.json} · .cursor/rules/*.mdc
 - **Rules** map to Claude's native path-scoped `.claude/rules/` and Cursor's `.mdc` — loaded only when relevant, so your context stays lean.
 - **Roles** (planner, architect, implementer, reviewer, qa, devops, orchestrator) become subagents.
 - **Guardrails** run as a `PreToolUse` hook; the **Constitution + Decision Log** are injected by a `SessionStart` hook.
+- **Generation is safe by construction:** the config is validated before any file is touched (a bad config or an out-of-project `outDir` writes nothing), the generator only deletes/overwrites files it recorded in `.kit/build-manifest.json` (your own files are never blown away), and a mid-build failure rolls back to the previous output.
 
 ## Commands
 
