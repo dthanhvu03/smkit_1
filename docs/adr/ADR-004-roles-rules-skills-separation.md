@@ -1,6 +1,9 @@
 # ADR-004 — Roles, Rules, Skills & Commands are four distinct abstractions
 
-- **Status:** Accepted (2026-07-11). Design-only; implementation deferred to a later task.
+- **Status:** Accepted (2026-07-11). **Skill layer implemented** (two-layer `SKILL.md` +
+  `skill.kit.yaml`, standard-compliant emitter, backward-compat migration, drop-warnings —
+  see `engine/emitter.mjs`, the 6 migrated `engine/skills/*`, and the skill tests). Role
+  and Rule schema changes remain design-only / deferred.
 - **Context:** Research in
   [`docs/research/2026-07-11-roles-rules-skills-architecture.md`](../research/2026-07-11-roles-rules-skills-architecture.md)
   verified the current abstractions against live standards (agents.md, agentskills.io,

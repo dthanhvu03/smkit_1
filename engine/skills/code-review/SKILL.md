@@ -1,14 +1,12 @@
 ---
-id: code-review
-name: Code Review
+name: code-review
 description: Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
-paths:
-  - "**/*"
-related_roles:
-  - reviewer
-related_rules:
-  - consistency-guard
-  - evidence-gate
+license: Proprietary
+compatibility: Requires repository read access and git.
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: platform-team
 ---
 
 # Code Review skill

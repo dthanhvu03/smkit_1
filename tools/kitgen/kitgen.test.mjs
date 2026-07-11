@@ -418,11 +418,21 @@ test("skills: emitted SKILL.md is standard-compliant — name = dir, no `paths`"
   assert.doesNotMatch(gen, /^paths:/m, "emitted skill must not contain a paths block");
 });
 
-test("skills: migrating old-format skills warns (name/paths/related_*) — never silent", () => {
-  const w = collectBuildWarnings(KIT_ROOT);
+test("skills: migrating an OLD-format skill warns (name/paths/related_*) — never silent", () => {
+  const tmp = copyKit();
+  const sk = join(tmp, "engine", "skills", "legacy-skill");
+  mkdirSync(sk, { recursive: true });
+  writeFileSync(join(sk, "SKILL.md"),
+    "---\nid: legacy-skill\nname: Legacy Display Name\ndescription: old format\npaths:\n  - \"**/*\"\nrelated_roles:\n  - reviewer\nrelated_rules:\n  - hard-rules\n---\n\n# Legacy\n");
+  const w = collectBuildWarnings(join(tmp)).filter((x) => x.source.includes("legacy-skill"));
   const fields = new Set(w.map((x) => x.field));
   for (const f of ["name", "paths", "related_*"]) assert.ok(fields.has(f), `expected migration warning for ${f}`);
   for (const x of w) { assert.ok(x.source, "warning has source path"); assert.ok(x.message, "warning has message"); }
+});
+
+test("skills: the shipped engine skills are already migrated (no warnings against the real kit)", () => {
+  const w = collectBuildWarnings(KIT_ROOT);
+  assert.deepEqual(w, [], `engine skills should be two-layer/clean; got: ${JSON.stringify(w)}`);
 });
 
 test("skills: new two-layer skill emits allowed-tools + disable-model-invocation + supporting files, not tests/", () => {

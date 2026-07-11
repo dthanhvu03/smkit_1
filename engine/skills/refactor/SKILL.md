@@ -1,14 +1,12 @@
 ---
-id: refactor
-name: Refactor
+name: refactor
 description: Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code.
-paths:
-  - "**/*"
-related_roles:
-  - architect
-  - reviewer
-related_rules:
-  - consistency-guard
+license: Proprietary
+compatibility: Requires repository read access and git.
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: platform-team
 ---
 
 # Refactor skill
