@@ -1,0 +1,30 @@
+{
+  "id": "agentsmd",
+  "displayName": "AGENTS.md (interchange)",
+  "verification": {
+    "status": "verified",
+    "verifiedAt": "2026-07-11",
+    "sourceType": "interchange-format",
+    "note": "Whole-file interchange artifact; broadly read by multiple agents. It is a generated interoperability target, never a source of truth (ADR-001)."
+  },
+  "artifacts": [
+    "AGENTS.md"
+  ],
+  "features": {
+    "globalInstructions": "native",
+    "pathScopedRules": "unsupported",
+    "skills": "unsupported",
+    "commands": "unsupported",
+    "hooks": "unsupported",
+    "hardBlock": "unsupported",
+    "agentsMd": "native",
+    "runtimeRouter": "unsupported",
+    "progressiveDisclosure": "none",
+    "transactionalGeneration": "kit-owned",
+    "driftDetection": "kit-owned",
+    "ownershipManifest": "kit-owned"
+  },
+  "limitations": [
+    "Whole-file only: no path scoping, no policy enforcement. Interoperability, not a policy engine."
+  ]
+}

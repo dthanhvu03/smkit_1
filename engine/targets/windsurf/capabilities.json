@@ -1,0 +1,30 @@
+{
+  "id": "windsurf",
+  "displayName": "Windsurf",
+  "verification": {
+    "status": "unverified",
+    "verifiedAt": null,
+    "sourceType": "in-repo-usage",
+    "note": "Modern trigger/globs frontmatter (not legacy XML) not re-confirmed against current official docs (CHƯA XÁC MINH)."
+  },
+  "artifacts": [
+    ".windsurf/rules/*.md"
+  ],
+  "features": {
+    "globalInstructions": "native",
+    "pathScopedRules": "supported",
+    "skills": "unsupported",
+    "commands": "unsupported",
+    "hooks": "unsupported",
+    "hardBlock": "unsupported",
+    "agentsMd": "unknown",
+    "runtimeRouter": "unsupported",
+    "progressiveDisclosure": "globScoped",
+    "transactionalGeneration": "kit-owned",
+    "driftDetection": "kit-owned",
+    "ownershipManifest": "kit-owned"
+  },
+  "limitations": [
+    "trigger: glob / always_on frontmatter; legacy .windsurfrules XML intentionally not used."
+  ]
+}
