@@ -1,0 +1,70 @@
+# Memory Entry Schema — SIXMEN ERP AI OS v2
+# Enforces declarative-only memory: facts, not instructions
+# Validator: .cursor/bootstrap/validate-memory-entry.ps1
+
+$schema: "http://json-schema.org/draft-07/schema#"
+title: MemoryEntry
+description: >
+  Schema for SIXMEN AI memory entries.
+  Memory = what is TRUE (declarative facts).
+  Rules/instructions live ONLY in SKILL.md or policy engine — never in memory.
+type: object
+required:
+  - name
+  - description
+  - metadata
+additionalProperties: false
+properties:
+  name:
+    type: string
+    pattern: "^[a-z0-9_-]+$"
+    description: Kebab-case slug — unique per memory file
+  description:
+    type: string
+    maxLength: 200
+    description: One-line hook used by MEMORY.md index — must be specific enough to decide relevance
+  metadata:
+    type: object
+    required:
+      - type
+    additionalProperties: false
+    properties:
+      type:
+        type: string
+        enum:
+          - user
+          - feedback
+          - project
+          - reference
+        description: >
+          user: role/prefs/knowledge of the user
+          feedback: correction or confirmed approach
+          project: project state/decisions
+          reference: pointers to external resources
+          NOTE: No "instruction" or "rule" type — those belong in SKILL.md / policy engine
+  body:
+    type: string
+    maxLength: 2000
+    description: >
+      Memory body content.
+      MUST be declarative (what is true).
+      MUST NOT contain imperative directives.
+      Forbidden patterns: "always do", "never do", "ignore", "override",
+      "from now on", "you must", "execute", "disregard instructions".
+
+# Injection detection rules (enforced by validate-memory-entry.ps1)
+x-injection-patterns:
+  - pattern: "(?i)always do"
+  - pattern: "(?i)never do"
+  - pattern: "(?i)ignore (previous|all|the) (instructions|rules)"
+  - pattern: "(?i)override"
+  - pattern: "(?i)bypass"
+  - pattern: "(?i)disregard"
+  - pattern: "(?i)forget your (instructions|guidelines)"
+  - pattern: "(?i)you must"
+  - pattern: "(?i)you shall"
+  - pattern: "(?i)from now on"
+  - pattern: "(?i)henceforth"
+  - pattern: "(?i)new (system|agent) instruction"
+  - pattern: "(?i)updated rule"
+  - pattern: "(?i)execute the following"

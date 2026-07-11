@@ -1,0 +1,24 @@
+<!-- GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build -->
+
+# Guard Design skill
+
+Design a guardrail so it fails safe and is provably hard to bypass.
+
+## Workflow
+1. State what the guard must stop and in which mode(s).
+2. Decide the **BLOCK / WARN / ALLOW** outcome for each case; default to fail-closed on ambiguity.
+3. Enumerate **bypass attempts** (chaining `&&`/`|`, quoting, case, whitespace, `$()`, path escape, obfuscation) and confirm each is handled or explicitly out of scope.
+4. Write tests for every case; note residual risk that only an OS sandbox can close.
+
+## Output format (required)
+```md
+## What it must stop (+ mode)
+## Decision table
+| Case | Input | Decision | Reason |
+|---|---|---|---|
+## Bypass attempts covered
+## Residual risk (needs sandbox)
+## Tests to add
+## Rollback
+```
+Never claim a string/AST guard is isolation.

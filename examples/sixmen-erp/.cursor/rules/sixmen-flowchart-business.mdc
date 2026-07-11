@@ -1,0 +1,147 @@
+﻿---
+name: sixmen-flowchart-business
+description: Chuẩn flowchart/tài liệu business SIXMEN — phụ thuộc tuần tự, ngôn ngữ slide vs kỹ thuật. Dùng khi sửa 04_*_Flow hoặc slide luồng.
+globs: docs/erp/phases/**/04_*_Flow.md,docs/erp/phases/**/04_Process_Flow.md,docs/erp/flows/**
+alwaysApply: false
+---
+
+# SIXMEN — Flowchart & tài liệu business
+
+> Bổ sung cho `hethongtuduy.mdc`. **Mỗi task tài liệu/luồng:** đọc `hethongtuduy.mdc` trước khi trả lời hoặc sửa file.
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** ngôn ngữ slide vs kỹ thuật, phụ thuộc tuần tự flowchart, CTY/HKD/PO/LSX/Nhanh semantics trên sơ đồ.
+- **Canonical context:** `docs/erp/phases/GD1_Kho_SX/04_Process_Flow.md` → `docs/erp/phases/GD1_Kho_SX/04_*_Flow.md` → `docs/erp/phases/GD1_Kho_SX/06_Workflow_Status.md` · `sixmen-governance.mdc` workflow priority.
+- **Required project memory:** HKD = bán/vận hành · CTY = SX/mua/pháp nhân · hàng CTY chưa tự bán được · LSX ≠ PO gửi xưởng/NCC · Nhanh P1 = hub sàn · `product_variants.sku` ví dụ trên slide.
+- **Deprecated / rejected:** kỹ thuật (D01, `style_key`) trên nút slide · `docs/erp/flows/SIXMEN_ERP_Luong_hoat_dong_chinh.md` làm file sửa chính · mũi tên tuần tự không kiểm phụ thuộc.
+- **Applies to:** sửa `04_*_Flow`, slide luồng, tài liệu business flow (always on).
+- **Does not apply to:** implement Laravel code (→ backend/envelope); schema DDL (→ ERD).
+- **Conflict handling:** defer governance SoT; process flow domain file wins over conversation summary.
+- **Stop condition:** flow thiếu actor/decision gate · đổi thứ tự bước không ghi cũ→mới · PO/LSX nhầm vai trò.
+
+## 1. Hai lớp ngôn ngữ
+
+| Lớp | Đối tượng | Được dùng | Không đặt trên nút sơ đồ slide |
+|-----|-----------|-----------|--------------------------------|
+| **Business** | PM, kho, SX, Sales, QLVH | Mẫu SP cha, mã hàng, định mức, nháp/duyệt, ghép Nhanh | — |
+| **Kỹ thuật** | Dev, BA spec | D01, `style_key`, `product_variants`, FR-xxx | Chỉ trong bảng §7.2, ERD, SRS — hoặc chú thích dưới sơ đồ |
+
+**Mã quyết định (D01, D03…):** trên slide nói «chuẩn Sixmen» + ví dụ `SXPL006-DEN-M`; ghi «D01» ở bảng giải thích / phụ lục.
+
+## 2. Kiểm tra phụ thuộc trước khi vẽ mũi tên tuần tự
+
+Trước khi `A → B` trên flowchart, xác nhận **B thật sự cần A xong**.
+
+**Product Flow §2 — phụ thuộc đã chốt:**
+
+| Việc | Gắn với | Cần trước | Song song được? |
+|------|---------|-----------|-----------------|
+| Định mức (BOM) | Mẫu SP cha | Bước 1 (mẫu) | ✅ với gán mã vạch (sau bước 2) |
+| Gán mã vạch | Từng mã hàng | Bước 2 (danh sách mã) | ✅ với định mức |
+| In tem / quét | Từng mã hàng | **Gán mã vạch** | ❌ không trước mã vạch |
+| Duyệt (`active`) | Từng mã | Định mức **và** tem quét OK | ❌ thiếu một nhánh |
+| Ghép mã hub Nhanh *(P1)* | Từng mã ERP | Duyệt mã (`active`) | ❌ · **QL kho** — Sales chỉ giá/ảnh listing · **Nhanh = hub** đã nối Shopee/TikTok… — **không** = «chỉ bán Nhanh» |
+| Push / cập nhật tồn sàn | Listing **ghép đúng** trên Nhanh *(P1)* | E25 khớp màu·size·mã | P1: ERP → **Nhanh** → sàn · **GĐ 2 KT:** ERP → sàn trực tiếp · **ghép lệch = dừng push** |
+| Ghép lệch | Cặp map sai variant | Có link nhưng E25 fail | Dừng push · sửa map · SLA 24h · P2 block pack |
+| PO / LSX / GRN | Từng mã | Duyệt mã | ❌ không cần ghép Nhanh |
+
+**«Định mức đủ»** = đủ **dòng** vải/phụ liệu + SL/1 SP trên BOM — **không** = kho còn đủ hàng.
+
+**Purchase §8.1 — bốn loại đơn (không ghi «CTY hoặc HKD» trên một nút):**
+
+| Loại | Đơn | Kho | Bán? |
+|------|-----|-----|------|
+| **A** Đặt xưởng / FOB | CTY gửi xưởng · HKD T−1 *nếu có* · **A1B:** thuê may · FOB một phần · FOB toàn phần | CTY | ❌ → §9/§10 |
+| **B** Vật tư SX | CTY → NCC | CTY | ❌ |
+| **C** Mua bán / VP | HKD → NCC *(VP/chi phí CTY — P01C vận hành)* | HKD *(VP → CTY)* | ✅ khi đủ ĐK *(HKD)* |
+| **D** HKD mua từ CTY | **A4D1** HKD PO nội bộ · **A4D2** CTY xuất/chuyển hợp lệ *(P01D)* | HKD | ✅ khi đủ CTY-HKD *(O5)* |
+
+**P0 — nguồn PO *(P01):** Luồng sản phẩm · **LSX** · nhu cầu vận hành · **HKD mua từ CTY** → **P02** mã/SKU/NPL đủ điều kiện.
+
+**Loại A — A1B (bắt buộc ghi phân công vật tư):** **A1C** thuê công may (CTY cấp vật tư chính) · **A1D** FOB một phần · **A1E** FOB toàn phần — *(R_FOB / K_FOB)* · **ref** HKD PO/LSX *(R_REF)* · HKD T−1 *nếu có* *(trong R_CHAIN)*.
+
+**Purchase §8.1 — khối bổ sung (sơ đồ chi tiết):**
+
+| Khối | Nội dung chính | R/K đáng nhớ |
+|------|----------------|--------------|
+| **P0** | P01A–D nguồn → P02 đủ ĐK → P04 chuẩn bị | — |
+| **B1** | A1 → A1B → A1C/D/E → A2 · A3/A4 · **A4D** → A5 | R_REF · R_FOB · **R_LEGAL** / K_* |
+| **B2** | B20 → B21Q → B21 → B22/B23 → B24/B25/B26 | R_QUARTER · R_CHAIN · R_PRICE |
+| **B3–B4** | Nhận · C1–C2 · **QC %** *(D4R/D4T)* · chốt khi `qc_approved` · **SLA S1–S2** *(§8.2.3)* | R_DOC · **R_QC** · R5/K5 · R_COST · R_EDIT |
+| **B4B** | X1–X8: trả · bù · trừ · ngoại lệ · **S3** 5 ngày LV | R_X / K_X — SLA + owner + escalate QLVH |
+| **B5** | E0–E6: ghi CN từ D12 · deadline *(E1D CTY-HKD)* · KT rà C3–C5 | R7 · R7B · R7C |
+| **B6** | PAY1–PAY5: đến ngày CN → lệnh TT · CEO duyệt chi | — |
+| **AFTER** | O0–**O5** phân nhánh sau nhập | R8 / K8 |
+| **AUDIT** | G1 audit · G3 khóa sau chốt · G5 SLA | Phiếu chốt không sửa |
+
+**Ba mốc độc lập:** **B25** PO đã duyệt ≠ **D12** đã nhập kho ≠ **E6** QLVH duyệt hồ sơ ≠ **PAY5** đủ ĐK trả tiền.
+
+**Khớp hồ sơ *(C1–C2 tại B3 · C3–C5 tại B5)*:** PO · BB GH · GRN · **VAT** *(chuẩn SL & tiền)* · BB ĐNTT.
+
+**Production §9.1 — LSX *(HKD nhu cầu → CTY kiểm tồn → LSX)*:**
+
+| Khối | Nội dung chính | R/K đáng nhớ |
+|------|----------------|--------------|
+| **OVERVIEW** | O1–O9: SKU/BOM → nhu cầu → tồn → bổ sung → PO/LSX → SX → QC → nghiệm thu → HKD | — |
+| **P0** | SKU active + BOM *(§7)* | R0 / K0 |
+| **P1** | HKD yêu cầu / HKD PO nội bộ → CTY | — |
+| **A0** | Kiểm TP CTY — đủ thì fill HKD *(A03B CTY-HKD)*, **không LSX** | R1·R2·**R2B**·**R13** / K1·K2·**K2B**·**K13** |
+| **S0** | S02A mua §8C · S03A FOB · S04A SX+NPL · S05A sửa hàng | R12 / K12 |
+| **B1–B2** | LSX nội bộ · **Gọi Luồng PO** xưởng/NPL ref LSX | R3 / K3 |
+| **B3–B5** | NPL 100% BOM trước **mở LSX** *(B4D)* · `waiting_npl` · xuất NPL | R4·R5 / K4·K5 |
+| **B6–B8** | Tiến độ · deadline LSX · GRN TP · **B8R % + `workshop_qc_records`** | R6·R7·**R_WQC** / K6·K7·**K_WQC** |
+| **B9** | Lỗi/thiếu/phế — **Sx4** `due_at` | R11 / K11 |
+| **B10–B11** | Nghiệm thu · COGS lô | R8·R9 / K8·K9 |
+| **B12** | CTY→HKD fill — **B12C** kiểm CTY-HKD trước bán | R10 / K10 · **R2B · R13** |
+| **G · RISK** | Audit · **G6 SLA §9.2.4** · **`workshop_qc_records`** · **R0–R13** | G5 khóa sau close |
+
+**Ba mốc LSX:** **B4D** đã xác nhận ≠ **B8C** đã nhập TP ≠ **B11E** LSX hoàn tất.
+
+**Inventory §10.1 — CTY→HKD:**
+
+| Khối | Nội dung chính | R/K đáng nhớ |
+|------|----------------|--------------|
+| **P0** | Có hàng CTY · kiểm đạt · đủ nguồn gốc | R0–R2 / K0–K2 |
+| **P1** | Lý do HKD · nguồn: SX / tồn / mua CTY | — |
+| **A0** | Ưu tiên · giữ hàng · tách nguồn/lô | R11·R12 / K11·K12 |
+| **T1–T2** | Phiếu chuyển · gắn nhu cầu HKD · duyệt | R3·R4 / K3·K4 |
+| **T3–T4** | CTY xuất · HKD nhận · SLA | R6·R7·R14·R15 |
+| **T5–T6** | Kiểm HKD · tồn bán vs pending_docs | R5·R10 / K5·K10 |
+| **D0** | Tách TT xưởng vs nhập HKD | R9 / K9 |
+| **T7** | Dual-run · cập nhật kênh bán | R13 / K13 |
+| **T8** | Ngoại lệ · không sửa tay | R8·R16 / K8·K16 |
+
+**Ba mốc chuyển kho:** **T2E** phiếu duyệt ≠ **T3B** CTY xuất ≠ **T6F** được phép bán.
+
+## 3. Checklist trước khi hoàn thành sửa flowchart
+
+- [ ] Nút slide đọc được không cần mở SRS/ERD?
+- [ ] Có ví dụ mã cụ thể thay vì chỉ mã quyết định?
+- [ ] Nhánh song song dùng `∥` hoặc hai mũi tên từ cùng bước trước?
+- [ ] Điểm gộp (join) ghi rõ **cả hai** nhánh phải xong?
+- [ ] §2, §7.1, §7.2, 08 UC-01, 05 User Flow, Luong §1 **cùng một logic**?
+- [ ] Không đổi behavior ngầm khi chỉ sửa tài liệu — nếu đổi thứ tự thật, ghi rõ cũ → mới?
+
+## 4. ERP ↔ sàn TMĐT (đừng nhầm «Nhanh»)
+
+| Giai đoạn | ERP nối với | «Bán sàn» nghĩa là |
+|-----------|-------------|-------------------|
+| **GĐ 1 / P1** | **Nhanh.vn** (hub) | Ghép map + push tồn **listing Nhanh** → Nhanh đẩy Shopee/TikTok/Lazada… |
+| **GĐ 2 KT+** | **Sàn** (Channel API) | `channel_products` + push trực tiếp · Nhanh giảm dần |
+
+Trên slide: nói **«hub sàn Nhanh (P1)»** hoặc **«bán qua kênh sàn»** — tránh để người đọc hiểu ERP chỉ kết nối Nhanh.vn mà quên sàn TMĐT.
+
+## 5. Nguồn sự thật luồng Product GĐ1
+
+**Index:** `docs/erp/phases/GD1_Kho_SX/04_Process_Flow.md` §1–§6 · **Chi tiết:**
+
+| Domain | File | Anchor chính |
+|--------|------|--------------|
+| Product | `docs/erp/phases/GD1_Kho_SX/04_Product_Flow.md` | §7.1 · §7.2 |
+| Purchase | `docs/erp/phases/GD1_Kho_SX/04_Purchase_Flow.md` | §8.1 · §8.5 *(C1–C5)* |
+| Production | `docs/erp/phases/GD1_Kho_SX/04_Production_Flow.md` | §9.1 · §9.2 |
+| Inventory | `docs/erp/phases/GD1_Kho_SX/04_Inventory_Flow.md` | §10.1 · §10.5–10.7 |
+| Operations | `docs/erp/phases/GD1_Kho_SX/04_Operations_Flow.md` | dual-run · swimlane |

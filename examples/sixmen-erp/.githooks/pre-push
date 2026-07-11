@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# pre-push — branch lifecycle + CI gate (nhẹ) trước khi push.
+# Mục tiêu: chặn push lên nhánh stale/đã merge (ERR-030) và code CI sẽ từ chối.
+# Bỏ qua khẩn cấp (KHÔNG khuyến khích): git push --no-verify
+# Cài: git config core.hooksPath .githooks  (init-kit.sh tự làm).
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+fail=0
+
+REMOTE_NAME="${1:-}"
+BASE_REMOTE="github"
+BASE_BRANCH="main"
+BASE_REF="$BASE_REMOTE/$BASE_BRANCH"
+
+check_branch_lifecycle() {
+  local local_ref="$1"
+  local local_sha="$2"
+
+  [[ -z "$local_ref" || -z "$local_sha" ]] && return 0
+  [[ "$local_sha" = "0000000000000000000000000000000000000000" ]] && return 0
+  [[ "$local_ref" != refs/heads/* ]] && return 0
+
+  local branch="${local_ref#refs/heads/}"
+  [[ "$branch" == "$BASE_BRANCH" || "$branch" == "master" ]] && return 0
+
+  if ! git rev-parse --verify "$local_sha" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if git remote get-url "$BASE_REMOTE" >/dev/null 2>&1; then
+    git fetch "$BASE_REMOTE" "$BASE_BRANCH" 2>/dev/null || true
+  fi
+
+  if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
+    echo "  ⚠️  Không có $BASE_REF — bỏ qua branch lifecycle check"
+    return 0
+  fi
+
+  local behind ahead
+  behind="$(git rev-list --count "$local_sha".."$BASE_REF" 2>/dev/null || echo 0)"
+  ahead="$(git rev-list --count "$BASE_REF".."$local_sha" 2>/dev/null || echo 0)"
+
+  echo "  Branch: $branch · ahead $ahead · behind $behind (vs $BASE_REF)"
+
+  if [ "${behind:-0}" -gt 0 ]; then
+    echo "  ❌ Branch behind $BASE_REF — sync trước push:"
+    echo "     bash .cursor/bootstrap/sync-main-into-branch.sh"
+    fail=1
+  fi
+
+  local cherry_out upstream delta
+  cherry_out="$(git cherry "$BASE_REF" "$local_sha" 2>/dev/null || true)"
+  if [ -n "$cherry_out" ]; then
+    upstream="$(printf '%s\n' "$cherry_out" | grep -c '^-' || true)"
+    delta="$(printf '%s\n' "$cherry_out" | grep -c '^+' || true)"
+    if [ "${upstream:-0}" -gt 0 ] && [ "${delta:-0}" -gt 0 ]; then
+      echo "  ❌ Nhánh stale (ERR-030): $upstream patch đã có trên $BASE_BRANCH + $delta commit delta mới."
+      echo "     PR cũ có thể đã merge — không push tiếp trên nhánh này."
+      echo "     Fix: git fetch $BASE_REMOTE && git checkout -b fix/TASK-XXX-slug $BASE_REF"
+      echo "          git cherry-pick <commit-delta>"
+      fail=1
+    fi
+  fi
+
+  local merge_base mt_out
+  merge_base="$(git merge-base "$local_sha" "$BASE_REF" 2>/dev/null || true)"
+  if [ -n "$merge_base" ]; then
+    mt_out="$(git merge-tree "$merge_base" "$local_sha" "$BASE_REF" 2>/dev/null || true)"
+    if echo "$mt_out" | grep -qE 'changed in both|<<<<<<<'; then
+      echo "  ❌ Merge conflict dry-run với $BASE_REF (GitHub: Can't automatically merge)"
+      echo "     Fix: branch mới từ $BASE_REF + cherry-pick delta (Cách B · ERR-030)"
+      fail=1
+    fi
+  fi
+}
+
+echo "▶ pre-push gate (branch lifecycle + Pint + architecture-lint + PHPStan)"
+
+if [ "$REMOTE_NAME" = "$BASE_REMOTE" ]; then
+  echo "  ▶ branch lifecycle (ERR-030 guard)"
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    check_branch_lifecycle "$local_ref" "$local_sha"
+  done
+fi
+
+# 1. Pint — code style (= CI job 'lint')
+# Dùng cache-file tạm (fresh) mỗi lần → re-eval toàn bộ như CI checkout sạch,
+# tránh blind-spot pint cache che file dirty (ERR-023 follow-up · GD0-020).
+if [ -x vendor/bin/pint ]; then
+  _pint_cache="$(mktemp -t pint-prepush.XXXXXX 2>/dev/null || echo /tmp/pint-prepush.cache)"
+  if ./vendor/bin/pint --test --cache-file="$_pint_cache" >/dev/null 2>&1; then
+    echo "  ✅ Pint (fresh cache)"
+  else
+    echo "  ❌ Pint: style chưa sạch → sửa bằng: ./vendor/bin/pint"
+    fail=1
+  fi
+  rm -f "$_pint_cache"
+else
+  echo "  ⚠️  vendor/bin/pint không có (chạy 'composer install') — bỏ qua bước này"
+fi
+
+# 2. Architecture lint — schema-type conformance (= CI job 'architecture-lint')
+if [ -f scripts/architecture-lint.sh ]; then
+  if bash scripts/architecture-lint.sh >/dev/null 2>&1; then
+    echo "  ✅ architecture-lint"
+  else
+    echo "  ❌ architecture-lint: xem chi tiết: bash scripts/architecture-lint.sh"
+    fail=1
+  fi
+fi
+
+# 3. PHPStan L5 (= CI job 'phpstan') — ERR-042: local pre-push thiếu bước này → CI fail sau Pest/Pint pass
+if [ -x vendor/bin/phpstan ]; then
+  if ./vendor/bin/phpstan analyse --no-progress --memory-limit=512M >/dev/null 2>&1; then
+    echo "  ✅ PHPStan L5"
+  else
+    echo "  ❌ PHPStan: chạy ./vendor/bin/phpstan analyse --no-progress --memory-limit=512M"
+    fail=1
+  fi
+else
+  echo "  ⚠️  vendor/bin/phpstan không có — bỏ qua (composer install)"
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "🛑 Push bị chặn — sửa lỗi trên rồi push lại."
+  echo "   (Khẩn cấp, tự chịu trách nhiệm: git push --no-verify)"
+  exit 1
+fi
+echo "✅ pre-push gate PASS"
+exit 0

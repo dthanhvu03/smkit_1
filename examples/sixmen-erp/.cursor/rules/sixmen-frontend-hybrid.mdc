@@ -1,0 +1,83 @@
+﻿---
+name: sixmen-frontend-hybrid
+description: Filament 3 + Livewire HYBRID — permission UI, Service calls, UI is not security boundary.
+globs: app/Filament/**,resources/views/**,app/Livewire/**
+alwaysApply: false
+---
+
+# SIXMEN Frontend (HYBRID)
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** Filament vs Livewire, permission UI, Service delegation, UI ≠ security boundary.
+- **Canonical context:** `docs/erp/core/05_Screen_Specs.md` · `docs/erp/ui/walkthrough/*` · `docs/erp/core/04_Architecture.md` §2 HYBRID · `docs/erp/phases/GD1_Kho_SX/09_Permission_Matrix.md`.
+- **Required project memory:** ẩn nút ≠ authorize · mọi mutation → Policy → 403 · Livewire/Filament gọi Service, không business logic trong Blade.
+- **Deprecated / rejected:** jQuery/DataTables default · logic nghiệp vụ trong view · coi UI visibility là authorization.
+- **Applies to:** `app/Filament/**`, `resources/views/**`, `app/Livewire/**`.
+- **Does not apply to:** pure backend API; docs-only.
+- **Conflict handling:** envelope/backend rules win on mutation path; governance on permission matrix change.
+- **Stop condition:** mutation không có backend Policy · permission matrix change chưa Human Owner.
+
+## Purpose
+
+Filament CRUD + Custom Livewire workflows; permission UX aligned with backend Policy.
+
+## Use when
+
+- Filament Resource, form, table
+- Livewire workflow (BOM, picking, reconciliation)
+- Admin UI permission visibility
+
+## Stack
+
+- Filament 3: CRUD, Tables, Forms, Shield
+- Custom Livewire: workflow phức tạp
+
+| Filament | Livewire |
+|----------|----------|
+| CRUD đơn giản | BOM, picking, barcode scan |
+| Users, roles, master | Reconciliation, dashboard phức tạp |
+
+## UI is not security boundary
+
+- Hiding button ≠ authorization
+- Every mutation → backend **Policy** → **403** if denied
+- Livewire/Filament must call **Service** — no business logic in Blade/view
+
+## Permission UI
+
+```php
+public static function canCreate(): bool
+{
+    return auth()->user()->can('core.users.create');
+}
+
+public function delete(int $id): void
+{
+    $model = Model::findOrFail($id);
+    $this->authorize('delete', $model);
+    // delegate to Service
+}
+```
+
+## Guardrails
+
+- No jQuery/DataTables as default stack
+- No business logic in Blade
+- No action without permission check (UI + backend)
+
+## Source of truth
+
+- `docs/erp/core/05_Screen_Specs.md` · `docs/erp/ui/walkthrough/*`
+- `docs/erp/core/04_Architecture.md` §2 HYBRID, §3.10
+
+## Final checklist
+
+- [ ] Correct Resource/component chosen (Filament vs Livewire)
+- [ ] Permission visible/hidden checked
+- [ ] Backend Policy still enforced (403 test exists)
+- [ ] Validation errors displayed
+- [ ] Empty / loading / error states
+- [ ] Audit / action feedback on mutation

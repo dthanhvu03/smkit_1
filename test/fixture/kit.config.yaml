@@ -1,0 +1,25 @@
+# Deterministic fixture for golden-file tests. Do not edit casually — changing it
+# requires regenerating golden via: UPDATE_GOLDEN=1 npm test
+version: 2
+project:
+  name: "Golden Fixture"
+  language: en
+mode: vibe
+stack:
+  profile: generic
+agents:
+  - agentsmd
+  - claude
+  - cursor
+  - copilot
+  - windsurf
+outDir: out
+approvers:
+  schema_change: []
+invariants: []
+guardrails:
+  block:
+    - "rm -rf /"
+    - "git push --force"
+    - "DROP TABLE"
+  allow_extra: []

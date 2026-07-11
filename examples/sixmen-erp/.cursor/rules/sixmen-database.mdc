@@ -1,0 +1,108 @@
+﻿---
+name: sixmen-database
+description: ERD, schema, migration safety, PostgreSQL 16, canonical SKU. Dùng khi migration/schema/index/FK/import-export data shape.
+globs: database/**,**/ERD.md,**/migration-note.md
+alwaysApply: false
+---
+
+# SIXMEN Database
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** ERD canonical, migration safety, SKU naming, FK/index/CHECK, import/export shape.
+- **Canonical context:** `docs/erp/phases/GD0_Nen_tang/ERD.md` · `docs/erp/phases/GD1_Kho_SX/ERD.md` · `docs/ai-agent/reference/doc-map.md` · `sixmen-governance.mdc`.
+- **Required project memory:** `product_variants.sku` canonical · `variant.code` deprecated · inventory/NPL balance chỉ qua critical services · PostgreSQL 16 · migration-note trước Backend DDL.
+- **Deprecated / rejected:** `docs/erp/core/03_SRS.md` §3 DDL làm chuẩn schema · drop column prod không backup · hard delete movement/audit.
+- **Applies to:** `database/**`, `**/ERD.md`, `**/migration-note.md`.
+- **Does not apply to:** pure UI không đụng schema; business rule only → BA/Architect.
+- **Conflict handling:** defer governance + data-safety; ERD conflict → stop, không chọn ngầm.
+- **Stop condition:** schema source không rõ · drop/purge core data · migration prod không backup/approval.
+
+## Purpose
+
+Design/review ERD, schema, constraints, indexes, migration notes, import/export data shape.
+
+## Use when
+
+- Schema/migration/index/FK/constraint changes
+- New table/field
+- Import/export template affects DB
+- Data model conflict
+
+## Do not use when
+
+- Pure UI change without schema impact
+- Business rule only (→ `@sixmen-ba` / Architect)
+
+## Required inputs
+
+- Task brief
+- Target phase/module
+- Source ERD (GĐ0 or GĐ1)
+- Existing migration note (if any)
+- Affected screens/services if known
+
+## Source of truth
+
+| Phase | Canonical |
+|-------|-----------|
+| GĐ0 schema | `docs/erp/phases/GD0_Nen_tang/ERD.md` |
+| GĐ1 schema | `docs/erp/phases/GD1_Kho_SX/ERD.md` |
+| Deprecated | `docs/erp/core/03_SRS.md` §3 DDL **cannot** override ERD |
+
+Conflict rule: `sixmen-governance.mdc`
+
+## Canonical naming
+
+| Entity | Rule |
+|--------|------|
+| `product_variants.sku` | Canonical unique SKU key |
+| `variant.code` | **Deprecated** |
+| `inventory` | Finished goods balance/cache — mutation **only** via `InventoryService` |
+| `inventory_movements` | Finished goods source of truth (**append-only**) |
+| `material_inventory_balances` | NPL balance/cache — mutation **only** via `MaterialInventoryService` |
+| `material_inventory_movements` | NPL source of truth (**append-only**) |
+| Warehouse | `legal_entity_id` (CTY/HKD) |
+
+## PostgreSQL
+
+- Target **PostgreSQL 16** (ADR-002)
+- PostgreSQL-compatible types; JSONB when query/filter needed
+- Laravel Enum + validation; PostgreSQL `CHECK` for high-risk status
+- Soft-deletable high-traffic tables: index `deleted_at` or partial index `WHERE deleted_at IS NULL`
+
+## Migration safety
+
+- Migration note **required** before Backend writes migration
+- Every FK in filters/joins → index
+- Every FK → explicit `onDelete` / `onUpdate`
+- Non-null column on populated table → nullable/default/backfill strategy
+- Drop/rename production column → backup + data migration + rollback + Human Owner approval
+- `down()` reversible or explicitly marked non-reversible
+
+## Soft delete and retention
+
+- `deleted_at` — hide from UI; **not** authorization to hard delete
+- Movement/audit append-only — see `sixmen-data-safety.mdc`
+
+## Guardrails
+
+- No migration prod without backup
+- No drop column without data migration plan
+- Human Owner gate on schema change
+
+## Output contract
+
+Return: ERD delta · affected tables/columns · index/FK/CHECK plan · migration order · rollback/data migration note · open questions · Human Owner gate if needed.
+
+Template: `.cursor/templates/sixmen/migration-note.md`
+
+## Final checklist
+
+- [ ] Matches canonical ERD (not deprecated `03_SRS` DDL)
+- [ ] `product_variants.sku` (not `variant.code`)
+- [ ] FK indexes + onDelete/onUpdate defined
+- [ ] Migration note filled; Human Owner notified if schema change
+- [ ] Append-only tables not designed for hard delete cleanup

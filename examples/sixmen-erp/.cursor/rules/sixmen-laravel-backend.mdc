@@ -1,0 +1,91 @@
+﻿---
+name: sixmen-laravel-backend
+description: Laravel backend — envelope, Critical domain guards (short), forbidden patterns.
+globs: app/**/*.php,modules/**/*.php,routes/**/*.php,database/**/*.php,tests/**/*.php
+alwaysApply: false
+---
+
+# SIXMEN Backend
+
+> Envelope đầy đủ: `sixmen-architecture-envelope.mdc` · Sequence: `docs/erp/phases/GD0_Nen_tang/07_Sequence_Diagram.md` · `docs/erp/phases/GD1_Kho_SX/07_Sequence_Diagram.md` §0.1
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** Laravel layer pattern, forbidden patterns, critical guard usage trong PHP.
+- **Canonical context:** `sixmen-architecture-envelope.mdc` · `docs/erp/core/04_Architecture.md` §3 · `docs/erp/phases/GD0_Nen_tang/07_Sequence_Diagram.md` §0.1 · `docs/erp/phases/GD1_Kho_SX/09_Permission_Matrix.md`.
+- **Required project memory:** FormRequest → Policy → Service → transaction + audit · critical services only for stock/docs/COGS · Pest 403 · Shield permissions.
+- **Deprecated / rejected:** `$request->all()` mutation · `DB::table('inventory')` outside service · manual PO/GRN codes · Policy bypass vì UI ẩn nút.
+- **Applies to:** `app/**/*.php`, `modules/**/*.php`, `routes/**/*.php`.
+- **Does not apply to:** docs-only; frontend-only không có PHP backend touch.
+- **Conflict handling:** envelope + data-safety override skill preferences; schema → migration-note + governance gate.
+- **Stop condition:** bypass service boundary · DELETE/TRUNCATE prod · migration không có note/approval.
+
+## Layer
+
+```php
+public function store(StoreXRequest $request, XService $service)
+{
+    $this->authorize('create', X::class);
+    return $service->create($request->validated());
+}
+```
+
+## Critical domain guards *(short)*
+
+> Chỉ **critical single-entry** services — không phải mọi service. Chi tiết + future services: envelope rule.
+
+- [ ] Tồn TP: `InventoryService` only — không update `inventory` trực tiếp
+- [ ] Tồn NPL: `MaterialInventoryService` only — không update `material_inventory_balances` trực tiếp
+- [ ] Mã chứng từ: `DocumentNumberService` only — transaction + `FOR UPDATE`
+- [ ] COGS: `CogsService` hoặc costing service đã duyệt ADR
+- [ ] Validation: `FormRequest` / validated DTO — không `$request->all()` mutation
+- [ ] Authorization: Policy/scope — UI ẩn button không thay backend
+- [ ] Movement/audit: append-only — không UPDATE/DELETE sửa lỗi nghiệp vụ
+- [ ] Reporting: mutation/FOR UPDATE → primary; `pgsql_reporting` chỉ report/export
+
+**Envelope chung (mọi mutation):** business mutation qua Service; không logic Controller/Filament Resource/Livewire/Blade.
+
+## Forbidden patterns
+
+- `DB::table('inventory')->update(...)` outside `InventoryService`
+- `DB::table('material_inventory_balances')->update(...)` outside `MaterialInventoryService`
+- Manual PO/GRN/ADJ/TRF/LSX/HDNT/BBGN code generation
+- Business mutation in Controller / Filament Resource / Livewire / Blade
+- Mutation without Policy
+- Multi-table mutation without `DB::transaction()`
+- Mutation on `pgsql_reporting`
+- Bypass Policy because UI hides button
+
+## Comment convention
+
+> Nguyên tắc: **code nói WHAT, comment nói WHY**. Comment tốt nhất là comment tìm được cách không phải viết (refactor tên/hàm cho tự rõ trước).
+
+**Viết comment khi:**
+- Workaround / gotcha framework (vd: middleware priority, Filament v4 API breaking) — điều người đọc không suy ra được từ code
+- Edge case · quyết định phi hiển nhiên (vì sao chọn cách này thay vì cách hiển nhiên)
+- Inline ≤ 2 dòng; nếu lý do dài → **1 dòng "why" + ref `ERR-xxx`/ticket** (chi tiết sống ở KNOWN-ISSUES/artifact, **không copy vào code**)
+- PHPDoc chỉ khi chữ ký chưa đủ rõ: `@throws`, array shape, intent không lộ qua type hint
+
+**Cấm:**
+- Comment "what" lặp lại code (`// tạo brand` trên `Brand::create(...)`)
+- Block comment dài trùng nội dung artifact/KNOWN-ISSUES → thay bằng 1 dòng + ref
+- PHPDoc máy móc lặp lại type đã hint (Laravel style: bỏ docblock khi type tự nói)
+- Commented-out code (xóa — git giữ lịch sử)
+
+## Bắt buộc
+
+- CRUD → Policy; Shield `{action}_{resource}` (`09_Permission_Matrix.md`)
+- Audit: Spatie Activity Log
+- Pest: happy path + **403**
+
+## Output contract
+
+Files changed · service methods · FormRequest · Policy · tests · migration note ref · `impact-risk-rollback.md` if data.
+
+## Final checklist
+
+- [ ] `architecture-compliance-checklist.md` ticked
+- [ ] No forbidden patterns
+- [ ] Critical guards respected (not every service listed — only when domain touched)

@@ -1,0 +1,32 @@
+---
+description: Ép agent đóng lượt đúng quy trình SIXMEN — artifact + CI parity — không đợi HO nhắc
+alwaysApply: true
+---
+
+# SIXMEN — Agent closeout (mọi lượt có sửa code)
+
+> Hook ép: `.githooks/pre-push` (Pint · arch-lint · **PHPStan**). Rule này ép **hành vi agent** trước khi kết response.
+
+## Trong CÙNG lượt response (trước khi báo xong / push)
+
+Khi đã sửa `app/` · `modules/` · `database/` · `tests/` · `resources/` cho task ERP:
+
+1. **`artifacts/{Task-ID}/00-gate-status.md`** — tick bước xong · dời `← CURRENT` · Review readiness / qa_gate
+2. **`artifacts/PROGRESS.md`** — icon + commit hash + test count
+3. **`artifacts/KNOWN-ISSUES.md`** — append ERR nếu lỗi >15 phút hoặc CI/blocker (kể cả RESOLVED)
+4. **QA artifact** (code task): `06-test-plan.md` · `07-architecture-compliance-checklist.md` khi qua QA gate. **Tính năng nhập liệu BẮT BUỘC kín validation + ngoại lệ (07 §2.1)**: form đầy đủ (required/format/range/điều kiện/minItems) + DB constraint backstop + mutation tồn/tiền map exception **409/422** (không 500 trần). Test 422 Filament/API + QueryException CHECK.
+5. **`09-handoff-summary.md`** — tạo khi task DONE (QA gate PASS + mọi bước xong). 2-view Vận hành + Kỹ thuật, Markdown (không HTML). Task code/feature mới đều cần; task vặt Mức 0–1 (đổi label/sort) thì không.
+6. **`business-walkthrough.md`** (Human-control package) — **task `code` chạm nghiệp vụ / tồn / tiền** (vd PO, GRN, tồn, giá vốn): luồng tiếng Việt + số cụ thể + bảng quy tắc R1..Rn (ô ký) → **Khanh duyệt TRƯỚC merge** (như Vũ duyệt schema). Kèm `demo-*.php` + traceability khi đóng task. Task CRUD/UI thuần (dưới ngưỡng tồn/tiền) thì KHÔNG bắt buộc.
+
+**KHÔNG** kết lượt chỉ báo cáo chat khi tracker chưa sync. **KHÔNG** hỏi "có ghi KNOWN-ISSUES không". **KHÔNG** báo task DONE khi thiếu `09-handoff-summary.md`. **KHÔNG** merge task nghiệp vụ khi thiếu `business-walkthrough` Khanh duyệt.
+
+## Trước `git push`
+
+- Pre-push chạy PHPStan (= CI) — agent chạy `phpstan` nếu sửa PHP nhiều file
+- `validate-artifacts.sh -t {Task-ID} -s` khi đóng bước gate
+
+## Không báo "task xong"
+
+Human Owner gate **PENDING** (schema / ADR / merge) → STOP, không DONE.
+
+Chi tiết: `.cursor/skills/sixmen-orchestrator/SKILL.md` § Auto-update · `CLAUDE.md` § LUẬT CỨNG #1 · orient `/orchestrator` Bước 0 (`AGENTS.md` trước code).

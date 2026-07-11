@@ -1,18 +1,15 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Generated agent config when experimenting (outDir: dist).
+# When a real project sets outDir: ".", remove this and commit the generated files.
+dist/
 
-# Other files and folders
-.settings/
+node_modules/
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# Per-developer, not shared
+.kit/*.local.md
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Guard audit log (runtime, not tamper-evident)
+.kit/audit.log
+
+
+#Ignore cursor AI rules
+.cursor\rules\codacy.mdc

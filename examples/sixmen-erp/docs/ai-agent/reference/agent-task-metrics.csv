@@ -1,0 +1,4 @@
+task_id,task_type,started_at,ended_at,agent_platform,always_on_rules_lines_est,artifact_compliance,gate_violations,ho_gates_pending,qa_gate,notes
+EXAMPLE-TASK,docs-only,,,cursor,397,PASS,0,0,N/A,Gold standard template
+PILOT-GD0-B1,docs-only,2026-06-17,2026-06-17,cursor,397,PASS,0,0,N/A,Rules validation pilot PASS
+M-ERP-KIT-IMPROVE,docs-only,2026-06-17,2026-06-17,cursor,397,PASS,0,0,N/A,Kit v1.1.0 improvements

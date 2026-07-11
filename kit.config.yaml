@@ -1,0 +1,59 @@
+# Universal Agent Kit — project config (single source of truth)
+# Non-coders never edit this by hand: `kit init` interviews you and writes it.
+# Docs: docs/kit-refactor/00-refactor-design.md
+version: 2
+
+project:
+  name: "My App"
+  language: en          # en | vi
+
+mode: vibe              # vibe | standard | strict
+
+stack:
+  profile: generic      # generic | nextjs | laravel-erp | python
+  test: ""              # e.g. "npm test"   (profile provides defaults)
+  lint: ""              # e.g. "npm run lint"
+  build: ""             # e.g. "npm run build"
+
+# Which agent targets the generator emits for.
+agents:
+  - agentsmd            # -> AGENTS.md (cross-agent base: Codex/Copilot/Cursor/Claude all read it)
+  - claude              # -> CLAUDE.md, .claude/rules, .claude/agents, .claude/skills, .claude/settings.json
+  - cursor              # -> .cursor/rules/*.mdc
+  - copilot             # -> .github/copilot-instructions.md + .github/instructions/*
+  - windsurf            # -> .windsurf/rules/*.md
+
+# Where generated files go. Keep "dist" while experimenting so nothing existing
+# is overwritten. Set to "." to write real config into a live project.
+outDir: dist
+
+# Who must approve risky actions. Empty list = self-approve (vibe).
+approvers:
+  schema_change: []
+  prod_deploy: []
+  data_delete: []
+
+# "Lines that must not be crossed" — replaces hardcoded ERP invariants.
+# The consistency/guard layer warns (vibe/standard) or blocks (strict) on touch.
+invariants: []
+  # - path: "src/payments/**"
+  #   rule: "All money changes go through PaymentService and need a test"
+
+# Destructive-op guardrails. `block` is enforced by a PreToolUse hook in ALL modes
+# (can be extended, never disabled). Values are matched as substrings of the command.
+guardrails:
+  block:
+    - "rm -rf /"
+    - "rm -rf ~"
+    - "git push --force"
+    - "git push -f"
+    - "git reset --hard"
+    - "DROP TABLE"
+    - "DROP DATABASE"
+    - "TRUNCATE"
+    - "DELETE FROM"
+    - "docker compose down -v"
+    - "docker volume rm"
+    - "docker volume prune"
+    - "docker system prune --volumes"
+  allow_extra: []

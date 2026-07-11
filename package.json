@@ -1,0 +1,37 @@
+{
+  "name": "universal-agent-kit",
+  "version": "0.1.0",
+  "description": "Guardrails and consistency for AI coding agents — for everyone, on any stack. One source generates Claude Code and Cursor config.",
+  "type": "module",
+  "bin": {
+    "smkit": "tools/kitgen/cli.mjs"
+  },
+  "scripts": {
+    "init": "node tools/kitgen/init.mjs",
+    "build": "node tools/kitgen/kitgen.mjs build",
+    "check": "node tools/kitgen/kitgen.mjs check",
+    "doctor": "node tools/kitgen/kitgen.mjs doctor",
+    "test": "node --test \"tools/kitgen/*.test.mjs\""
+  },
+  "files": [
+    "engine",
+    "profiles",
+    ".kit",
+    "tools",
+    "kit.config.yaml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ai",
+    "claude-code",
+    "cursor",
+    "agents",
+    "vibe-coding",
+    "guardrails",
+    "scaffolding"
+  ],
+  "license": "MIT"
+}

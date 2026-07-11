@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# pre-commit — NHẮC cập nhật tracker khi commit có code. TASK-GD0-014.
+# Non-blocking (exit 0): chỉ nhắc, không chặn — vì không phải code-commit nào cũng cần KNOWN-ISSUE.
+# Chọn pre-commit thay Stop hook: commit-scoped → ít nhiễu hơn chạy mỗi lượt.
+set -uo pipefail
+ROOT="$(git rev-parse --show-toplevel)"; cd "$ROOT" || exit 0
+
+staged="$(git diff --cached --name-only)"
+code="$(echo "$staged" | grep -E '\.php$' | grep -vE '^tests/|/tests/' | head -1)"
+tracker="$(echo "$staged" | grep -E 'PROGRESS\.md|KNOWN-ISSUES\.md|gate-status\.md' | head -1)"
+
+if [ -n "$code" ] && [ -z "$tracker" ]; then
+  echo "⚠️  pre-commit: commit có code (.php) nhưng KHÔNG đụng PROGRESS / gate-status / KNOWN-ISSUES."
+  echo "    Nếu đây là 1 bước task → cập nhật tracker (CLAUDE.md § LUẬT CỨNG #1)."
+  echo "    (Cố ý bỏ qua: git commit --no-verify)"
+fi
+exit 0

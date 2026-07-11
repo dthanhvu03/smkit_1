@@ -1,0 +1,133 @@
+---
+description: Quy tắc UX tiếng Việt cho SIXMEN ERP — validation messages, labels, UI text
+globs:
+  - "lang/**"
+  - "app/Filament/**"
+  - "resources/views/**"
+alwaysApply: false
+---
+
+# SIXMEN Vietnamese UX
+
+## Purpose
+
+Đảm bảo UI tiếng Việt tự nhiên, không máy móc — validation messages, labels, notifications.
+
+## Quy tắc validation messages
+
+### ❌ KHÔNG dùng (máy móc)
+
+```php
+// Dịch word-by-word từ tiếng Anh
+'required' => 'Trường :attribute là bắt buộc.'
+'unique'   => 'Trường :attribute đã có trong cơ sở dữ liệu.'
+'email'    => 'Trường :attribute phải là một địa chỉ email hợp lệ.'
+'max'      => 'Trường :attribute không được lớn hơn :max kí tự.'
+```
+
+### ✅ NÊN dùng (tự nhiên)
+
+```php
+// Ngắn gọn, rõ ràng, như người Việt nói
+'required' => 'Không được bỏ trống.'
+'unique'   => ':attribute đã tồn tại.'
+'email'    => 'Email không hợp lệ.'
+'max'      => 'Tối đa :max ký tự.'
+```
+
+### Nguyên tắc
+
+1. **Bỏ "Trường"** khi không cần — nghe thừa
+2. **Câu ngắn** — không quá 10 từ
+3. **Chủ động** — "Tối đa 50 ký tự" thay vì "không được lớn hơn 50 ký tự"
+4. **Dùng từ phổ thông** — "bỏ trống" thay vì "không được để trống"
+5. **Tránh dịch máy** — đọc lại xem người Việt có nói như vậy không
+6. **Không để message MẶC ĐỊNH mơ hồ** — field có **regex/format/min-items/điều kiện** BẮT BUỘC `->validationMessages([...])` giải thích **sai gì + ví dụ** (vd SĐT "phải bắt đầu 0 hoặc +84 (VD: 0901234567)"; repeater "phải có ít nhất 1 dòng hàng"). KHÔNG để generic `'Định dạng không hợp lệ.'` / `'Tối thiểu 1 phần tử.'`
+
+## Quy tắc labels
+
+### Filament Resource
+
+```php
+// Form labels phải có ->label() tiếng Việt
+TextInput::make('code')
+    ->label('Mã')  // ✅ Có label
+    ->required()
+
+// Navigation labels
+protected static ?string $navigationLabel = 'Nhóm hàng';
+protected static ?string $modelLabel = 'nhóm hàng';
+protected static ?string $pluralModelLabel = 'Nhóm hàng';
+```
+
+## Quy tắc Filament translations
+
+Sau khi publish Filament lang, kiểm tra các key hay thiếu:
+
+```php
+// lang/vendor/filament-forms/vi/components.php
+'select' => [
+    'no_options_message' => 'Không có lựa chọn nào.',  // HAY THIẾU!
+    'no_search_results_message' => 'Không có kết quả tìm kiếm phù hợp.',
+    'placeholder' => 'Chọn một tùy chọn',
+    'search_prompt' => 'Bắt đầu gõ để tìm kiếm...',
+],
+```
+
+## Quy tắc notifications
+
+```php
+// ✅ Tự nhiên
+Notification::make()
+    ->title('Đã lưu')
+    ->body('Thông tin đã được cập nhật.')
+    ->success();
+
+// ❌ Máy móc
+Notification::make()
+    ->title('Thao tác thành công')
+    ->body('Bản ghi đã được lưu vào cơ sở dữ liệu.')
+    ->success();
+```
+
+## Quy tắc ô chọn ngày (date) — BẮT BUỘC
+
+Mọi trường ngày dùng preset chung **`SixmenForms::date('field', 'Label')`** (`app/Filament/Support/SixmenForms.php`) — KHÔNG dùng `DatePicker::make()` trần (sẽ ra ô mặc định trình duyệt, không nhất quán).
+
+```php
+// ✅ Chuẩn hệ thống (dd/mm/yyyy, lịch dropdown, tháng tiếng Việt, T2 đầu tuần)
+use App\Filament\Support\SixmenForms;
+SixmenForms::date('expected_date', 'Ngày giao')->required();
+
+// ❌ Không dùng trần — lệch định dạng, không tiếng Việt
+DatePicker::make('expected_date')->label('Ngày giao');
+```
+
+Áp cả trong form, filter, repeater. Cần datetime/time → bổ sung helper tương tự vào `SixmenForms` (không cấu hình rời từng nơi).
+
+**Default ngày — dùng `SixmenForms::today()`, KHÔNG `now()`/`today()` thô.** `app.timezone=UTC` nên `now()` lệch -1 ngày khoảng 0–7h sáng VN. `SixmenForms::today()` trả hôm nay theo giờ VN.
+
+**Ô text/textarea/mã — dùng preset `SixmenForms`:** `text()` (text thường), `textarea()` (nhiều dòng), **`code()`** (mã: HOA + bỏ khoảng trắng + maxLength; `upper: false` cho mã chữ thường). Field chain `->required()`/`->unique()`/`->regex()` riêng. Email/phone giữ custom (rule riêng). Sanitize ký tự ẩn do trait `SanitizesInput` (model). Ngày không cho tương lai → `->maxDate(SixmenForms::today())`.
+
+```php
+// ✅
+SixmenForms::date('order_date', 'Ngày đặt')->default(SixmenForms::today());
+// ❌ lệch ngày lúc sáng sớm
+->default(now())
+```
+
+## Checklist trước commit
+
+- [ ] Validation messages ngắn gọn, không "Trường" thừa
+- [ ] Filament labels đầy đủ tiếng Việt
+- [ ] Filament translations đã publish và kiểm tra key thiếu
+- [ ] Notifications dùng từ phổ thông
+- [ ] **Trường ngày dùng `SixmenForms::date()`, không `DatePicker::make()` trần**
+- [ ] **Field regex/format/min-items có `validationMessages` rõ — không generic "Định dạng không hợp lệ"/"Tối thiểu 1 phần tử"**
+- [ ] Đọc lại xem có nghe tự nhiên không
+
+## Files tham chiếu
+
+- `lang/vi/validation.php` — Laravel validation
+- `lang/vendor/filament-forms/vi/` — Filament forms
+- `lang/vendor/filament-panels/vi/` — Filament panels

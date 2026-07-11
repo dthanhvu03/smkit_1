@@ -1,0 +1,88 @@
+﻿---
+name: sixmen-architecture-envelope
+description: Architecture envelope — Critical domain guards (single-entry only), Policy, Service, transaction, audit.
+alwaysApply: true
+---
+
+# SIXMEN — Architecture Envelope
+
+> `docs/erp/core/04_Architecture.md` §3.1, §3.12–§3.13 · `docs/erp/phases/GD0_Nen_tang/07_Sequence_Diagram.md` §0.1 · `docs/erp/phases/GD1_Kho_SX/07_Sequence_Diagram.md` §0.1 · `sixmen-laravel-backend.mdc`
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** mutation envelope, critical domain guards (single-entry), reporting boundary.
+- **Canonical context:** `docs/erp/core/04_Architecture.md` · `docs/erp/phases/GD0_Nen_tang/07_Sequence_Diagram.md` §0.1 · `docs/erp/phases/GD1_Kho_SX/07_Sequence_Diagram.md` §0.1 · `sixmen-laravel-backend.mdc`.
+- **Required project memory:** `InventoryService` · `MaterialInventoryService` · `DocumentNumberService` · `CogsService` · FormRequest/Policy · append-only movement · `pgsql_reporting` read-only for mutation.
+- **Deprecated / rejected:** direct balance update · manual doc codes · business logic in Controller/Filament/Livewire/Blade · mutation on reporting connection · liệt kê mọi CRUD service như critical guard.
+- **Applies to:** mọi business mutation backend/frontend gọi service.
+- **Does not apply to:** read-only `*ReportService` / dashboard query (vẫn không mutate trên `pgsql_reporting`).
+- **Conflict handling:** defer `sixmen-data-safety` cho audit/append-only; defer `sixmen-governance` cho schema/service mới vào critical guards (cần ADR).
+- **Stop condition:** bypass critical service · mutation thiếu Policy/transaction · schema change không có migration-note.
+
+## Envelope mọi mutation
+
+```
+User action (Filament / Livewire / API)
+  → route/action
+  → FormRequest / validation
+  → EnsureBranchScope (+ legal_entity scope)
+  → Policy::authorize
+  → Domain Service
+  → DB::transaction (if multi-table)
+  → Activity Log (audit)
+  → Event / notification (if cross-module)
+  → Test (Pest: happy + 403)
+```
+
+- Business mutation → **Service** — không logic trong Controller / Filament Resource / Livewire / Blade.
+- Do **not** import across module boundaries unless public Service/Event is defined.
+
+## Critical domain guards
+
+> Khóa **critical single-entry boundaries** — bypass có thể sai tồn, sai mã chứng từ, sai giá vốn, mất audit/truy vết.
+> **Không thêm mọi service vào đây.** Service mới chỉ thêm khi ADR/Architecture Decision xác nhận critical single-entry.
+
+- **Finished-goods inventory** — chỉ `InventoryService`; không update trực tiếp `inventory`; movement + balance cùng transaction; append-only.
+- **Material/NPL inventory** — chỉ `MaterialInventoryService`; không update trực tiếp `material_inventory_balances`.
+- **Document numbering** — chỉ `DocumentNumberService` (PO/GRN/ADJ/TRF/LSX/HDNT/BBGN); transaction + `FOR UPDATE`; override → permission + audit.
+- **COGS / costing** — chỉ `CogsService` hoặc costing service đã duyệt ADR; không tính rải rác UI/controller/report.
+- **Input validation** — mutation input qua `FormRequest` / validated DTO; không `$request->all()` ghi DB.
+- **Policy / scope** — mọi mutation qua Policy; UI ẩn button **không** thay backend authorization.
+- **Movement / audit append-only** — `inventory_movements`, `material_inventory_movements`, `activity_log`, audit logs; không UPDATE/DELETE để “sửa lỗi” → reversal/adjustment/cancel/exception (`sixmen-data-safety.mdc`).
+- **Reporting connection** — mutation/transaction/`FOR UPDATE`/critical services → **primary only**; `pgsql_reporting` chỉ report/dashboard/export đã duyệt; fresh data → `force_primary`.
+- **Request observability** — important mutations should carry `request_id` and request timing metadata where available: `duration_ms`, `db_query_count`, `db_time_ms`, `memory_peak_mb`. Request timing ≠ Activity Log — xem GĐ0 `07_Sequence_Diagram.md` §0.1.
+
+### Thêm service mới vào block này khi
+
+Kiểm soát tồn/movement · mã chứng từ/sequence/lock · tiền/COGS/thanh toán · audit/pháp lý/khớp hồ sơ · permission scope CTY-HKD/kho · ADR đánh dấu single-entry.
+
+| Future *(chưa active guard)* | Khi nào thêm |
+|------------------------------|--------------|
+| `PaymentRequestService` | Payment request có duyệt/thanh toán thật |
+| `DocumentMatchService` | Khớp hồ sơ / `pending_docs` là gate vận hành |
+| `StockReservationService` | Giữ tồn / reserve đơn sàn |
+| `ChannelSyncService` | Sync đơn/sản phẩm sàn TMĐT |
+| `ReturnService` | Hoàn hàng ảnh hưởng tồn/tiền/chứng từ |
+| `PricingService` | Giá bán/khuyến mãi rule tập trung |
+
+### Không thêm vào critical guards
+
+CRUD/helper thông thường — bypass không hỏng dữ liệu lõi: `BrandService`, `ColorService`, `SizeService`, `SupplierService`, `ProductService` CRUD cơ bản, `NotificationService`, `ExportExcelService`, `DashboardCardService`, `*ReportService` / `DashboardQueryService` *(read-only query — không mutation)*.
+
+Vẫn tuân: business mutation qua Service; không logic trong Controller/Filament/Livewire/Blade.
+
+## Trước / sau implement
+
+**Trước:** `task-brief.md` · skill đúng vai trò · source of truth đúng phạm vi (ERD / workflow / AC) — **báo rõ file đã đọc**; không quét toàn repo. `architecture-impact.md` (if logic/DB/quyền) · `migration-note.md` (if schema).
+
+**Sau:** Pest happy + **403** (+ 422 if API) · `architecture-compliance-checklist.md` · Human Owner gate if schema/rule/≥2 module/prod.
+
+## Cấm tuyệt đối
+
+- Bypass critical services: `InventoryService`, `MaterialInventoryService`, `DocumentNumberService`, `CogsService`
+- Manual `DELETE`/`TRUNCATE`/`DROP` on production (`sixmen-data-safety.mdc`)
+- Mutation on `pgsql_reporting`
+- Migration without `migration-note.md` + approval
+- React/Vue SPA `frontend/` for admin GĐ0–3

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "bash .cursor/bootstrap/claude-session-digest.sh"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "bash .cursor/bootstrap/guard-shell-cursor.sh"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "bash .cursor/bootstrap/guard-read-cursor.sh"
+      }
+    ],
+    "postToolUse": [
+      {
+        "matcher": "Shell",
+        "command": "bash .cursor/bootstrap/sanitize-tool-output.sh"
+      }
+    ]
+  }
+}

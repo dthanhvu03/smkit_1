@@ -1,0 +1,106 @@
+﻿---
+name: sixmen-qa
+description: Pest testing, ERP safety tests, regression, permission checklist. Dùng sau implement hoặc trước release.
+globs: tests/**,**/*Test.php,**/*test.php,database/migrations/**,database/seeders/**
+alwaysApply: false
+---
+
+# SIXMEN QA
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** Pest tests, ERP safety matrix, permission/concurrency/inventory consistency checks.
+- **Canonical context:** `sixmen-qa.mdc` · `docs/erp/core/04_Architecture.md` §13 · `.cursor/templates/sixmen/architecture-tests-skeleton.md` · `docs/ai-agent/reference/phase-gates.md` Gate 1→2.
+- **Required project memory:** 403 mọi protected mutation · document number concurrency · movement+balance same tx · no `pgsql_reporting` mutation · CTY/HKD scope · P0 fail blocks release.
+- **Deprecated / rejected:** test scaffold cho mọi CRUD service như critical guard · skip 403 vì “UI đã ẩn”.
+- **Applies to:** `tests/**`, `**/*Test.php`, sau implement / trước release.
+- **Does not apply to:** docs-only (trừ AC review); domain không đụng stock/docs → không bắt full guard matrix.
+- **Conflict handling:** data-safety + envelope define what to test; governance gate nếu release thiếu approval.
+- **Stop condition:** risky change (schema/stock/permission) thiếu test plan · P0 fail mà vẫn release · env thiếu chạy security test.
+
+## Purpose
+
+Test case, edge case, regression, permission/security — catch ERP-specific failures.
+
+## Use when
+
+- After backend/frontend implement
+- Before release
+- PR architecture compliance review
+
+## Required inputs
+
+- `task-brief.md` DoD
+- `acceptance-criteria.md` (if business feature)
+- Changed modules / permissions
+
+## Framework
+
+Pest PHP — `tests/Feature/`, `tests/Unit/`
+
+## Critical domain guard tests
+
+> Chỉ khi backend đụng stock, documents, COGS, hoặc mutation critical — **không** yêu cầu test mọi CRUD service.
+
+When backend touches stock, documents, COGS, or mutations:
+
+- [ ] No direct `inventory` update outside `InventoryService`
+- [ ] No direct `material_inventory_balances` update outside `MaterialInventoryService`
+- [ ] Document number concurrency — no duplicate (`FOR UPDATE` + transaction)
+- [ ] Inventory/material: movement + balance consistent (same transaction)
+- [ ] Mutation services do **not** use `pgsql_reporting`
+- [ ] Movement/audit not updated/deleted to fix business mistakes
+
+## Required ERP safety tests
+
+> Phần Critical domain guard tests ở trên — tick khi domain đụng tới; không duplicate scaffold cho CRUD thường.
+
+For backend/migration features, cover:
+
+- [ ] `migrate:fresh --seed` passes
+- [ ] Unauthorized user → **403**
+- [ ] Invalid input → **422** (API/FormRequest)
+- [ ] IDOR / scope: CTY vs HKD isolation
+- [ ] `super_admin` bypass still audited
+- [ ] Document number: no duplicate under concurrency (`FOR UPDATE` + transaction)
+- [ ] Inventory: movement + balance consistent (same transaction)
+- [ ] Material inventory: movement + balance consistent
+- [ ] Soft delete hides default UI; no hard delete of referenced records
+- [ ] Mutation services do **not** use `pgsql_reporting`
+- [ ] No direct `inventory` / `material_inventory_balances` update outside Service
+
+## GĐ1 regression (bổ sung)
+
+- GRN TC-PUR-01 · LSX TC-PROD-03/08
+- Login, audit log, Shield sync
+- PR: `architecture-compliance-checklist.md`
+
+## Post-feature review gate *(sau xong 1 tính năng — trước PR/review)*
+
+1. **Detect:** `codacy.mdc` trên file PHP/JS đã sửa; Trivy nếu đổi dependency; `pint` / `phpstan` / `pest` khi có repo
+2. **Verify:** tick `architecture-compliance-checklist.md` + ERP safety tests (§ trên)
+3. **Report:** `test-plan.md` — P0 fail → block review
+
+Codacy không có → log fallback; vẫn bắt checklist + Pest P0.
+
+**Artifacts:** ghi `artifacts/{Task-ID}/06-test-plan.md` · `07-architecture-compliance-checklist.md` · cập nhật `00-gate-status.md` (`qa_gate`). Thiếu → **review blocker**.
+
+## Output contract
+
+- Test cases (Given/When/Then or Pest descriptions)
+- Pest files added/updated
+- Manual regression checklist
+- Pass/fail per case
+- Blockers
+- Risks not tested
+
+Template: `.cursor/templates/sixmen/test-plan.md`
+
+## Final checklist
+
+- [ ] 403 for every protected mutation
+- [ ] Concurrency test for document numbers (if applicable)
+- [ ] Inventory consistency (if stock touched)
+- [ ] P0 fail → block release

@@ -1,0 +1,63 @@
+﻿---
+name: sixmen-data-safety
+description: Data safety guardrails — soft delete, purge, production DELETE safety, append-only movement/audit, DB user separation.
+alwaysApply: true
+---
+
+# SIXMEN Data Safety
+
+> ADR-010 · `docs/erp/phases/GD0_Nen_tang/ERD.md` §5 · `docs/erp/phases/GD1_Kho_SX/ERD.md` §20 · `docs/erp/core/04_Architecture.md` §11.6
+
+## Purpose
+
+Prevent data loss, unsafe deletion, unsafe purge, and accidental production damage.
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** cấm destructive ops prod, append-only movement/audit, soft delete ≠ purge, DB user separation.
+- **Canonical context:** ADR-010 · `docs/erp/phases/GD0_Nen_tang/ERD.md` §5 · `docs/erp/phases/GD1_Kho_SX/ERD.md` §20 · `docs/erp/core/04_Architecture.md` §11.6.
+- **Required project memory:** không `DELETE`/`TRUNCATE`/`DROP` prod · correction = cancel/reversal/adjustment/exception · `sixmen_app` / `sixmen_report` / `sixmen_migration` roles.
+- **Deprecated / rejected:** hard delete core ERP · rewrite movement/audit history · auto-purge MVP · raw SQL khuyến khích DELETE prod.
+- **Applies to:** DB, migration, backend service, import/export, report, release, production data.
+- **Does not apply to:** docs-only tasks (không relax guard khi task sau đụng data).
+- **Conflict handling:** không skill/role rule nào override data safety; defer `sixmen-governance` cho Human Owner gate.
+- **Stop condition:** yêu cầu xóa/purge prod · drop/rename schema · bypass audit · đổi retention.
+
+## Always apply
+
+Any task touching database, migration, backend service, import/export, report, release, or production data.
+
+## Guardrails
+
+- **Never** run manual `DELETE` / `TRUNCATE` / `DROP` on production.
+- **Never** add raw SQL examples that encourage direct production `DELETE`.
+- **Never** hard delete core ERP data.
+- Soft delete does **not** mean physical purge.
+- Do **not** auto-purge: `inventory_movements`, `material_inventory_movements`, `activity_log`, PO/GRN/QC/production/transfer/adjustment documents, user/branch/legal entity/warehouse core data.
+- Movement/audit tables are **append-only**: `inventory_movements`, `material_inventory_movements`, `activity_log`, audit/event logs.
+- **Không** `UPDATE` / `DELETE` movement hoặc audit để “sửa lỗi nghiệp vụ” — không hard delete core ERP data.
+- Business correction → **cancel / reversal / adjustment / exception** only.
+- Future purge **must** have: whitelist, dry-run, batch limit, max affected rows, reference check, audit, approval, backup/snapshot, rollback plan.
+- **MVP:** do **not** build purge/archive jobs — policy only.
+
+## DB user separation
+
+| User | Role |
+|------|------|
+| `sixmen_app` | Normal app read/write |
+| `sixmen_report` | Read-only reporting (`pgsql_reporting`) |
+| `sixmen_migration` | Deploy/migration only |
+| `sixmen_maintenance` | Future purge/archive only |
+| `postgres` / admin | **Never** used by app |
+
+## Stop conditions
+
+Stop and ask Human Owner if task:
+
+- asks to delete production data;
+- asks to drop/rename columns/tables;
+- asks to bypass audit;
+- asks to purge movement/audit/core ERP records;
+- changes data retention behavior.

@@ -1,0 +1,129 @@
+﻿---
+name: sixmen-devops
+description: DevOps, Docker, CI/CD, release safety, DB users, backup/rollback. Dùng trước deploy staging/production.
+globs: docker-compose*,.github/**,Dockerfile*,.env.example
+alwaysApply: false
+---
+
+# SIXMEN DevOps
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** env, DB users, reporting connection, release workflow, backup/rollback.
+- **Canonical context:** `sixmen-devops.mdc` · `sixmen-data-safety.mdc` · `docs/erp/core/04_Architecture.md` §13 · ADR-009 reporting.
+- **Required project memory:** `sixmen_app` rw · `sixmen_report` readonly (`pgsql_reporting`) · never superuser for app · backup trước migrate prod · Human Owner approval prod deploy.
+- **Deprecated / rejected:** prod deploy không backup · migrate rollback unknown · purge không dry-run · app dùng `postgres` admin.
+- **Applies to:** `docker-compose*`, `.github/**`, `Dockerfile*`, `.env.example`, deploy/migration planning.
+- **Does not apply to:** local code-only không deploy; docs-only.
+- **Conflict handling:** data-safety wins on destructive ops; governance wins on prod gate.
+- **Stop condition:** env/prod unclear · no backup · Human Owner chưa approve prod · destructive DB không runbook.
+
+## Purpose
+
+Env, migration safety, queue/cache/log, release checklist, backup and rollback.
+
+## Use when
+
+- Deploy staging/production
+- Docker/CI setup
+- Env or DB connection changes
+- Migration prod planning
+
+## Required inputs
+
+- Target env: local / staging / production
+- Release scope
+- Migration list
+- Rollback plan
+- Backup status
+- Human Owner approval (production)
+
+## DB users
+
+| User | Role |
+|------|------|
+| `sixmen_app` | Application read/write |
+| `sixmen_report` | Read-only (`pgsql_reporting`) |
+| `sixmen_migration` | DDL/migration — deploy only |
+| `sixmen_maintenance` | Future purge/archive only |
+| `postgres` / admin | **Never** used by app |
+
+## Reporting env
+
+```env
+DB_REPORT_CONNECTION=pgsql_reporting
+DB_REPORT_HOST=
+DB_REPORT_PORT=5432
+DB_REPORT_DATABASE=
+DB_REPORT_USERNAME=sixmen_report
+DB_REPORT_PASSWORD=
+```
+
+MVP may point `DB_REPORT_HOST` to primary; future → read replica (ADR-009).
+
+## Stack
+
+- PostgreSQL 16 + Redis (`docker-compose`)
+- Horizon (queue)
+- GitHub Actions CI/CD
+- `.env.example` complete — no secrets in repo
+
+## Request timing / performance log
+
+For staging/prod debugging, important requests should expose:
+
+- `request_id`
+- `duration_ms`
+- `status_code`
+- `method`
+- `route`
+- `path`
+- `user_id`
+- `db_query_count`
+- `db_time_ms`
+- `memory_peak_mb`
+
+**Local:** Debugbar / Telescope.
+
+**Production MVP:** request timing middleware + app log. Sentry/APM optional when scaling.
+
+Request timing is technical observability. It does not replace business Activity Log.
+
+Canonical: `docs/erp/core/04_Architecture.md` §11.2 · `docs/erp/phases/GD0_Nen_tang/07_Sequence_Diagram.md` §0.1
+
+## Release workflow
+
+1. QA test-plan pass
+2. Backup DB (staging/prod)
+3. `migrate` on staging first; test rollback if applicable
+4. Deploy → `config:cache`, `route:cache` (prod)
+5. Restart Horizon / workers
+6. Smoke test + monitor logs
+7. `release-checklist.md`
+8. **Production: Human Owner approval**
+
+## Stop conditions
+
+Stop if:
+
+- Production deploy has no backup
+- Migration rollback unknown
+- Human Owner has not approved production
+- Destructive DB op without runbook
+- App uses superuser credentials
+- Purge/archive without dry-run + approval (`sixmen-data-safety.mdc`)
+
+## Final checklist
+
+- [ ] QA pass
+- [ ] Backup path recorded
+- [ ] Migrate staging pass
+- [ ] Rollback tested or documented
+- [ ] Env checked (`DB_REPORT_*`, app DB user not superuser)
+- [ ] Queue restarted
+- [ ] Smoke test pass
+- [ ] Logs monitored
+
+Template: `.cursor/templates/sixmen/release-checklist.md`

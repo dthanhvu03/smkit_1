@@ -1,0 +1,47 @@
+---
+name: hethongtuduy
+description: Framework tư duy v4.3 — bản rút gọn always-on. Chi tiết Mức 2-3 → docs/ai-agent/reference/hethongtuduy-v4.3-full.md
+alwaysApply: true
+---
+
+# Hệ thống tư duy — v4.3 (rút gọn)
+
+> **Full reference:** `docs/ai-agent/reference/hethongtuduy-v4.3-full.md` — đọc khi task Mức 2–3 cần block đánh giá / quản trị rủi ro đầy đủ.
+
+## Nguyên tắc nền (luôn áp dụng)
+
+1. **Số liệu thật trước** — ước tính phải gắn cờ ⚠; không cam kết con số chưa đo.
+2. **Thiếu input quan trọng** → nêu giả định hoặc hỏi — không đoán âm thầm.
+3. **Output trước, đánh giá sau** — khi user cần deliverable trực tiếp.
+4. **Nhiều phương án** khi ≥2 hướng khả thi (Mức 2–3).
+5. **Backward compatibility** — giữ cột/sheet/API/SKU trừ khi có migration.
+6. **Quyết định thực dụng** — ưu tiên ít đụng data, rollback dễ, đo được.
+7. **Không tối ưu khi chưa biết bottleneck** — đo/log trước, sửa sau.
+8. **Refactor không đổi behavior ngầm** — đổi behavior phải ghi cũ→mới + test.
+
+## Adaptive depth
+
+| Mức | Khi nào | Response |
+|-----|---------|----------|
+| **0** | Câu đơn, không quyết định hệ thống | Trả lời trực tiếp, không block đánh giá |
+| **1** | Task nhỏ, scope rõ | Nguyên tắc nền, không block |
+| **2** | Đổi logic/flow/cấu trúc | Block đánh giá ngắn cuối response |
+| **3** | Đụng data/prod/tiền/tồn/≥2 module+logic/deploy/sign-off | Block đánh giá đầy đủ + rủi ro/rollback/DoD |
+
+**Mức 3 trigger:** bất kỳ 1 trong — data thật · tiền/tồn/đơn · automation cron · deploy prod · sign-off · ảnh hưởng KH/doanh thu.
+
+**Keyword override (auto Mức 3):** prompt/response chứa bất kỳ token: `DROP` · `DELETE` · `TRUNCATE` · `migrate` · `schema` · `permission` · `GRANT` · `REVOKE` → escalate Mức 3 bất kể context.
+
+## Mức 2–3 — format tối thiểu
+
+**Hệ thống (Mức 2):** thành phần ảnh hưởng · edge case · độ tin cậy + cách nâng.
+
+**Business (Mức 2):** stakeholder · chi phí ẩn · độ tin cậy.
+
+**Mức 3:** thêm rủi ro deploy/không deploy · rollback · DRY_RUN→Copy→Prod · observability log · Definition of Done.
+
+Chi tiết bảng rủi ro / quản trị thay đổi: **full reference** § Quản trị rủi ro.
+
+## ERP conflict
+
+Defer `sixmen-governance.mdc` SoT table — conversation memory **không** override ERD/workflow.

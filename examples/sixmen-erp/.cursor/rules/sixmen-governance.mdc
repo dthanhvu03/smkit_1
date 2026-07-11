@@ -1,0 +1,160 @@
+﻿---
+name: sixmen-governance
+description: Governance SIXMEN ERP — Human Owner gate, source of truth, templates bắt buộc. Luôn áp dụng mọi task ERP.
+alwaysApply: true
+---
+
+# SIXMEN ERP — Governance
+
+## Purpose
+
+Gate quyền Human Owner, source of truth, và artifact bắt buộc trước/sau thay đổi ERP.
+
+## Memory conflict priority
+
+Khi mâu thuẫn, ưu tiên theo thứ tự (cao → thấp):
+
+1. System / platform instruction
+2. SIXMEN governance rule *(file này + always-on rules)*
+3. Source-of-truth document
+4. Phase gate (`docs/ai-agent/reference/phase-gates.md`)
+5. Specific skill instruction
+6. Current task brief
+7. Conversation memory
+8. Model assumption
+
+**Conversation memory không được override source-of-truth.** Thiếu SoT quan trọng → dừng và hỏi, không suy diễn ngầm.
+
+## Memory Scope
+
+This rule must keep active:
+
+- **Scope governed:** Human Owner gate, SoT conflict resolution, artifact bắt buộc, routing skills.
+- **Canonical context:** `docs/ai-agent/reference/shared-memory.md` · `docs/ai-agent/reference/doc-map.md` · `docs/ai-agent/reference/phase-gates.md` · bảng SoT conflict bên dưới · `AGENTS.md`.
+- **Required project memory:** decisions (`docs/erp/core/01_Master_Decisions.md`) · MVP (`docs/erp/core/06_MVP_Phase1.md`) · ERD GĐ0/GĐ1 · workflow GĐ1 chain · `product_variants.sku` canonical · Human Owner RACI · **artifact folder** `artifacts/{Task-ID}/` per task.
+- **Deprecated / rejected:** `docs/erp/core/03_SRS.md` §3 DDL override ERD · `variant.code` · conversation memory làm chuẩn schema/rule.
+- **Applies to:** mọi task ERP (always on).
+- **Does not apply to:** thay thế nội dung nghiệp vụ chi tiết trong BRD/flow — chỉ điều phối hành vi agent.
+- **Conflict handling:** defer `sixmen-data-safety.mdc` và `sixmen-architecture-envelope.mdc` khi liên quan data/service boundary; không role skill nào override hai rule đó.
+- **Stop condition:** SoT conflict chưa resolve · schema/rule/data/prod/permission change chưa có Human Owner path.
+
+## Shared memory loading rule
+
+Do **not** assume `docs/ai-agent/reference/shared-memory.md` is automatically loaded.
+
+**Read** that file when the task touches:
+
+- ERP schema / ERD / migration
+- business rule / workflow / phase scope
+- critical service boundary
+- data safety / purge / delete / archive
+- permissions / CTY-HKD / warehouse scope
+- reporting connection / read replica
+- skill/rule conflict
+
+For small docs-only wording changes, read only the target file and the relevant skill/rule.
+
+When the task is high-risk, report the files actually read before proposing changes.
+
+## Rules/skills anti-bloat rule
+
+Keep always-on rules short. Shared facts → `docs/ai-agent/reference/shared-memory.md` (pointer only in skills). Do not paste full SoT/ERD/guard catalogs into each `SKILL.md`. Changelog: `docs/ai-agent/reference/rules-changelog.md`.
+
+## Rules vs source of truth
+
+- Rules `alwaysApply: true` + `AGENTS.md` = **guardrail hành vi** — không thay tài liệu nghiệp vụ/schema.
+- Logic nghiệp vụ, schema, workflow: đọc **source of truth** bên dưới — không suy luận từ rules.
+- Skills (`.cursor/skills/*/SKILL.md`): **không** đọc toàn bộ mỗi lượt — chỉ Read skill đúng vai trò khi task cần.
+- Bắt đầu code: đọc task brief + skill + SoT đúng phạm vi — **không quét toàn repo** — báo rõ file đã đọc.
+
+## Quy tắc chung
+
+- Human Owner là người duyệt cuối.
+- Không tự ý thay đổi behavior cũ.
+- Không tự ý đổi schema nếu chưa có migration note.
+- Không xóa dữ liệu thật.
+- Không sửa nhiều module cùng lúc nếu task không yêu cầu.
+- Mỗi thay đổi phải có impact, risk, rollback nếu ảnh hưởng dữ liệu.
+- Module nào có quyền thao tác thì phải có permission.
+- Ưu tiên triển khai nhỏ, an toàn, đo được.
+
+## Source of truth conflict rule
+
+When documents conflict:
+
+| # | Topic | Canonical source |
+|---|-------|------------------|
+| 1 | Business / architecture decisions | `docs/erp/core/01_Master_Decisions.md` |
+| 2 | MVP scope | `docs/erp/core/06_MVP_Phase1.md` |
+| 3 | GĐ0 database schema | `docs/erp/phases/GD0_Nen_tang/ERD.md` |
+| 4 | GĐ1 database schema | `docs/erp/phases/GD1_Kho_SX/ERD.md` |
+| 5 | GĐ1 workflow | `docs/erp/phases/GD1_Kho_SX/04_Process_Flow.md` → `docs/erp/phases/GD1_Kho_SX/04_*_Flow.md` → `docs/erp/phases/GD1_Kho_SX/06_Workflow_Status.md` → `docs/erp/phases/GD1_Kho_SX/07_Sequence_Diagram.md` |
+| 6 | UI | `docs/erp/core/05_Screen_Specs.md` · `docs/erp/ui/walkthrough/*` |
+| 7 | Deprecated | `docs/erp/core/03_SRS.md` §3 DDL **must not** override ERD · `variant.code` deprecated → `product_variants.sku` |
+
+General doc priority (non-schema): `docs/erp/core/01_Master_Decisions.md` > `docs/erp/core/02_BRD.md` > `docs/erp/core/03_SRS.md` > `docs/erp/core/06_MVP_Phase1.md`.
+
+Data safety: `sixmen-data-safety.mdc` · ADR-010.
+
+## Human Owner (RACI)
+
+| Vai trò | Phạm vi duyệt |
+|---------|---------------|
+| Khanh | PM/BA, scope, DoD, nghiệm thu |
+| QLVH | Matrix quyền, pilot RBAC |
+| Vũ | Tech lead, kiến trúc triển khai |
+| CEO | Quyết định chiến lược, lệnh chi |
+
+## Stop conditions
+
+Agent **không** tự coi là đã duyệt. Dừng và hỏi Human Owner khi:
+
+- Đổi schema hoặc migration
+- Đổi business rule / state machine
+- Task ảnh hưởng ≥2 module
+- Deploy production hoặc chạy migration prod
+- Xóa / purge / ghi đè dữ liệu thật
+- Đổi permission matrix hoặc data retention
+
+## Output bắt buộc theo loại thay đổi
+
+| Loại | Template | Lưu tại *(bắt buộc)* |
+|------|----------|----------------------|
+| Gate tracker | `.cursor/templates/sixmen/gate-status.md` | `artifacts/{Task-ID}/00-gate-status.md` |
+| Task mới | `.cursor/templates/sixmen/task-brief.md` | `artifacts/{Task-ID}/01-task-brief.md` |
+| Kiến trúc | `.cursor/templates/sixmen/architecture-impact.md` | `artifacts/{Task-ID}/03-architecture-impact.md` |
+| Migration | `.cursor/templates/sixmen/migration-note.md` | `artifacts/{Task-ID}/04-migration-note.md` |
+| Đụng data | `.cursor/templates/sixmen/impact-risk-rollback.md` | `artifacts/{Task-ID}/05-impact-risk-rollback.md` |
+| Test | `.cursor/templates/sixmen/test-plan.md` | `artifacts/{Task-ID}/06-test-plan.md` |
+| Release | `.cursor/templates/sixmen/release-checklist.md` | `artifacts/{Task-ID}/08-release-checklist.md` |
+| Nghiệp vụ | `.cursor/templates/sixmen/acceptance-criteria.md` | `artifacts/{Task-ID}/02-acceptance-criteria.md` |
+| PR / kiến trúc | `.cursor/templates/sixmen/architecture-compliance-checklist.md` | `artifacts/{Task-ID}/07-architecture-compliance-checklist.md` |
+
+## Artifact discipline
+
+- **Mọi task ERP** tạo `artifacts/{Task-ID}/` + `00-gate-status.md` **trước** implement.
+- Agent **ghi file** — không chỉ output trong chat. Chat = tóm tắt; **SoT task** = folder artifact.
+- **Task ID:** `M-ERP-xx` hoặc `TASK-YYYYMMDD-slug`. Chi tiết: `artifacts/README.md`.
+
+## Review blockers *(agent không được báo "xong")*
+
+| Task type | Bắt buộc trước review |
+|-----------|------------------------|
+| **Mọi task** | `01-task-brief.md` · `00-gate-status.md` cập nhật |
+| **Code** (`app/`, `database/`, `tests/`, `resources/`) | `06-test-plan.md` (`qa_gate: PASS`) · `07-architecture-compliance-checklist.md` tick đủ |
+| **Human Owner gate** | Không còn `PENDING` trên gate đã trigger — phải `APPROVED` hoặc `N/A` |
+
+**Docs-only:** `qa_gate: N/A` — không cần 06/07.
+
+Agent **stop** và báo blocker nếu thiếu artifact hoặc `qa_gate: FAIL`.
+
+## Envelope kiến trúc
+
+Rules **`sixmen-architecture-envelope.mdc`** + **`sixmen-data-safety.mdc`**. Mọi mutation: scope → Policy → Service → audit → event.
+
+**Critical domain guards** = chỉ single-entry: `InventoryService` · `MaterialInventoryService` · `DocumentNumberService` · `CogsService` + FormRequest/Policy/append-only movement/`pgsql_reporting` boundary — **không** liệt kê mọi service CRUD; service mới chỉ thêm khi ADR xác nhận single-entry (`sixmen-architecture-envelope.mdc`).
+
+- Điều phối: `@sixmen-orchestrator`
+- Theo role: `@sixmen-it-manager`, `@sixmen-architect`, `@sixmen-backend`, `@sixmen-frontend`, `@sixmen-database`, `@sixmen-qa`, `@sixmen-devops`, `@sixmen-ba`
+
+Chi tiết: `AGENTS.md` · `docs/erp/core/04_Architecture.md` §3.13
