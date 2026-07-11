@@ -6,6 +6,7 @@
 // error BEFORE creating, deleting, or writing anything.
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
+import { collectInvariants } from "../../engine/emitter.mjs";
 
 export const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 export const MODES = ["vibe", "standard", "strict"];
@@ -66,6 +67,13 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
 
   if (cfg.outDir !== undefined && typeof cfg.outDir !== "string")
     warnings.push("'outDir' không phải string -> mặc định 'dist'");
+
+  // Invariant merge (engine→profile→project): surface id conflicts and bad
+  // enforcement values here, BEFORE any generation, so a conflict fails cleanly.
+  if (kitDir && !errors.some((e) => e.includes("stack.profile"))) {
+    try { collectInvariants(kitDir, cfg); }
+    catch (e) { errors.push(e.message); }
+  }
 
   // Filesystem boundary: refuse to generate outside the project (write + the
   // recursive cleanup that follows would otherwise escape the project root).

@@ -294,6 +294,38 @@ test("invariants: emit cursor .mdc + windsurf trigger rule (inert when empty)", 
   assert.ok(!/<rule/.test(wind), "windsurf must use trigger frontmatter, not legacy XML");
 });
 
+// ---- F-07: invariant merge (engine → profile → project) ------------------
+test("invariants: profile-level invariant is now merged and emitted (F-07)", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "profile: generic", "profile: nextjs");
+  assert.equal(runKit(tmp, "build").status, 0);
+  const files = walk(join(tmp, "out", ".cursor", "rules"));
+  assert.ok(files.some((f) => /invariant.*app-route-ts/.test(f)), "nextjs profile invariant must emit");
+  const wind = readFileSync(join(tmp, "out", ".windsurf", "rules", "invariant-1-app-route-ts.md"), "utf8");
+  assert.match(wind, /SOFT RULE/, "guidance invariant marked as soft rule");
+});
+
+test("invariants: duplicate id across layers fails with no output unless override (F-07)", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "profile: generic", "profile: nextjs");
+  editFile(join(tmp, "kit.config.yaml"), "invariants: []",
+    'invariants:\n  - id: invariant-app-route-ts\n    path: "app/**/route.ts"\n    rule: "clashing"');
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /invariant id conflict/);
+  assert.ok(!existsSync(join(tmp, "out")), "conflict must write nothing");
+});
+
+test("invariants: project override:true replaces the profile invariant (F-07)", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "profile: generic", "profile: nextjs");
+  editFile(join(tmp, "kit.config.yaml"), "invariants: []",
+    'invariants:\n  - id: invariant-app-route-ts\n    override: true\n    path: "app/**/route.ts"\n    rule: "project wins here"');
+  assert.equal(runKit(tmp, "build").status, 0);
+  const mdc = readFileSync(join(tmp, "out", ".cursor", "rules", "invariant-1-app-route-ts.mdc"), "utf8");
+  assert.match(mdc, /project wins here/);
+});
+
 // ---- guard v2 audit log (E2E) ---------------------------------------------
 test("guard v2: every decision appended to .kit/audit.log", () => {
   const tmp = mkdtempSync(join(tmpdir(), "kit-audit-"));

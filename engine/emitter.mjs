@@ -72,6 +72,43 @@ export function collectSkills(kitDir) {
     });
 }
 
+// Merge invariants across layers: engine → profile → project (F-07). Each invariant
+// gets a stable id (explicit `id` or slug of its path); a duplicate id is a conflict
+// unless the PROJECT layer explicitly sets `override: true` over a lower layer.
+// `enforcement` (guidance|static-check|hook|ci|unsupported) defaults to guidance.
+const INV_ENFORCEMENT = new Set(["guidance", "static-check", "hook", "ci", "unsupported"]);
+
+export function collectInvariants(kitDir, cfg) {
+  const out = [];
+  const byId = new Map();
+  const add = (inv, layer) => {
+    if (!inv || typeof inv !== "object" || !inv.rule) return;
+    const id = inv.id || `invariant-${slug(inv.path || inv.rule)}`;
+    const enforcement = inv.enforcement || "guidance";
+    if (!INV_ENFORCEMENT.has(enforcement))
+      throw new Error(`invariant "${id}": enforcement "${enforcement}" invalid -> ${[...INV_ENFORCEMENT].join(" | ")}`);
+    const rec = { ...inv, id, enforcement, layer };
+    const prev = byId.get(id);
+    if (prev) {
+      const canOverride = layer === "project" && inv.override === true && prev.layer !== "project";
+      if (!canOverride)
+        throw new Error(`invariant id conflict: "${id}" (${prev.layer} vs ${layer}) -> set 'override: true' on the project invariant to replace, or rename its id`);
+      out.splice(out.indexOf(prev), 1);
+    }
+    byId.set(id, rec);
+    out.push(rec);
+  };
+
+  const profDir = join("profiles", cfg.stack?.profile || "generic");
+  const profFile = join(kitDir, profDir, "profile.yaml");
+  if (existsSync(profFile)) {
+    const prof = parseYaml(readFileSync(profFile, "utf8"));
+    for (const inv of prof.invariants || []) add(inv, "profile");
+  }
+  for (const inv of Array.isArray(cfg.invariants) ? cfg.invariants : []) add(inv, "project");
+  return out;
+}
+
 // ---- render helpers (verbatim behavior — golden depends on exact bytes) ----
 const y = (v) => JSON.stringify(String(v));
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "rule";
@@ -196,14 +233,20 @@ function emitCursorCommand(cmd, S) {
   return `<!-- ${S.generated_banner} -->\n\n${cmd.body}\n`;
 }
 
+// Enforcement note so a human reading the artifact knows whether it is advisory.
+const invNote = (inv) =>
+  (inv.enforcement && inv.enforcement !== "guidance")
+    ? `\n\n_(enforcement: ${inv.enforcement})_`
+    : "\n\n_SOFT RULE — advisory guidance, not enforced by the kit._";
+
 function emitCursorInvariant(inv, S) {
   const fm = [`# ${S.generated_banner}`, `description: ${y(inv.rule || "")}`, `globs: ${inv.path || "**/*"}`, "alwaysApply: false"];
-  return `---\n${fm.join("\n")}\n---\n\n${inv.rule || ""}\n`;
+  return `---\n${fm.join("\n")}\n---\n\n${inv.rule || ""}${invNote(inv)}\n`;
 }
 function emitWindsurfInvariant(inv, S) {
   // Modern .windsurf/rules format: trigger frontmatter (NOT the legacy XML .windsurfrules).
   const fm = [`# ${S.generated_banner}`, "trigger: glob", `globs: ${inv.path || "**/*"}`];
-  return `---\n${fm.join("\n")}\n---\n\n${inv.rule || ""}\n`;
+  return `---\n${fm.join("\n")}\n---\n\n${inv.rule || ""}${invNote(inv)}\n`;
 }
 function emitWindsurfRule(rule, S) {
   const fmLines = [`# ${S.generated_banner}`];
@@ -294,7 +337,7 @@ export function buildOutputs(cfg, { kitDir = DEFAULT_KIT_DIR } = {}) {
   const commands = collectCommands(kitDir);
   const skills = collectSkills(kitDir);
   const alwaysRules = rules.filter((r) => r.scope !== "paths");
-  const invariants = Array.isArray(cfg.invariants) ? cfg.invariants : [];
+  const invariants = collectInvariants(kitDir, cfg);
   const ctx = { cfg, S, rules, roles, commands, skills, alwaysRules, invariants };
 
   const targets = new Set(cfg.agents || ["claude"]);
