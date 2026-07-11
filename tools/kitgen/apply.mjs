@@ -5,8 +5,9 @@
 //   planBuild()  — READ-ONLY. Decides deletes/writes/skips. Never mutates.
 //   applyBuild() — executes the plan and saves the manifest.
 // P0.3 wraps the mutating part of applyBuild in a backup/rollback transaction.
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, mkdtempSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { sha256, loadManifest, saveManifest } from "./manifest.mjs";
 
 // Compute the change plan. Pure/read-only.
@@ -65,10 +66,13 @@ export function planBuild({ outDir, outputs, projectDir, force = false }) {
 }
 
 // Execute a plan: delete stale, write outputs, persist the manifest.
-// `mutate` is injected so P0.3 can wrap it in a transaction; default applies directly.
-export function applyBuild(opts, mutate = applyPlanDirect) {
+// Transactional by default: if any single delete/write fails, everything already
+// applied is rolled back and the manifest is left unchanged, so the previous
+// generated output survives intact. `mutate` is injectable for tests.
+export function applyBuild(opts, mutate = applyPlanTransactional) {
   const plan = planBuild(opts);
   mutate(plan);
+  // Only reached when every mutation succeeded — safe to commit the new manifest.
   saveManifest(opts.projectDir, { outDir: plan.outDir, files: plan.newFiles });
   return {
     written: plan.writes.length,
@@ -78,11 +82,50 @@ export function applyBuild(opts, mutate = applyPlanDirect) {
   };
 }
 
-// Direct (non-transactional) application of a plan's mutations.
+// Direct (non-transactional) application of a plan's mutations. Used by tests.
 export function applyPlanDirect(plan) {
   for (const d of plan.deletes) rmSync(d.abs, { force: true });
   for (const w of plan.writes) {
     mkdirSync(dirname(w.abs), { recursive: true });
     writeFileSync(w.abs, w.content);
   }
+}
+
+// Apply a plan atomically-ish: back up every file that will be deleted or
+// overwritten, remember which writes are brand-new, then apply. On ANY failure,
+// undo in reverse (restore originals, remove newly-created files) and rethrow —
+// leaving the tree exactly as it was. Note: this is a best-effort backup/rollback,
+// not a kernel-atomic swap; directory rename atomicity is unreliable on Windows.
+export function applyPlanTransactional(plan) {
+  const backup = mkdtempSync(join(tmpdir(), "kitgen-tx-"));
+  const journal = []; // reverse-applied on failure
+  try {
+    for (const d of plan.deletes) {
+      const bp = join(backup, "b" + journal.length);
+      cpSync(d.abs, bp);
+      journal.push({ abs: d.abs, restore: bp });
+      rmSync(d.abs, { force: true });
+    }
+    for (const w of plan.writes) {
+      if (existsSync(w.abs)) {
+        const bp = join(backup, "b" + journal.length);
+        cpSync(w.abs, bp);
+        journal.push({ abs: w.abs, restore: bp });
+      } else {
+        journal.push({ abs: w.abs, createdNew: true });
+      }
+      mkdirSync(dirname(w.abs), { recursive: true });
+      writeFileSync(w.abs, w.content);
+    }
+  } catch (err) {
+    for (const j of journal.reverse()) {
+      try {
+        if (j.createdNew) rmSync(j.abs, { force: true });
+        else { mkdirSync(dirname(j.abs), { recursive: true }); cpSync(j.restore, j.abs); }
+      } catch { /* best-effort rollback */ }
+    }
+    rmSync(backup, { recursive: true, force: true });
+    throw err;
+  }
+  rmSync(backup, { recursive: true, force: true });
 }

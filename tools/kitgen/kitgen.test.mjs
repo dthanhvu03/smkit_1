@@ -10,6 +10,7 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
+import { applyPlanTransactional } from "./apply.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -352,4 +353,39 @@ test("manifest: hand-edited generated file is protected without --force, replace
   assert.match(readFileSync(gen, "utf8"), /TAMPERED/, "must not silently overwrite a modified generated file");
   assert.equal(runKit(tmp, "build", "--force").status, 0);
   assert.ok(!/TAMPERED/.test(readFileSync(gen, "utf8")), "--force replaces it");
+});
+
+// ---- P0.3: transactional generation (rollback on mid-write failure) -------
+test("transaction: a mid-write failure rolls back — earlier overwrite is restored", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "kit-tx-"));
+  const okAbs = join(tmp, "a.txt");
+  writeFileSync(okAbs, "ORIGINAL");
+  // A plain file used as a directory component makes the next write fail (ENOTDIR).
+  const blocker = join(tmp, "blocker");
+  writeFileSync(blocker, "x");
+  const plan = {
+    outDir: ".", deletes: [], skipped: [], warnings: [], newFiles: {}, manifest: {},
+    writes: [
+      { rel: "a.txt", abs: okAbs, content: "NEW-SHOULD-ROLL-BACK" },
+      { rel: "blocker/nope.txt", abs: join(blocker, "nope.txt"), content: "boom" },
+    ],
+  };
+  assert.throws(() => applyPlanTransactional(plan), /./);
+  assert.equal(readFileSync(okAbs, "utf8"), "ORIGINAL", "first overwrite must be rolled back on later failure");
+});
+
+test("transaction: rollback removes files that were newly created before the failure", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "kit-tx2-"));
+  const newAbs = join(tmp, "fresh.txt"); // does not exist yet → created new
+  const blocker = join(tmp, "b");
+  writeFileSync(blocker, "x");
+  const plan = {
+    outDir: ".", deletes: [], skipped: [], warnings: [], newFiles: {}, manifest: {},
+    writes: [
+      { rel: "fresh.txt", abs: newAbs, content: "created" },
+      { rel: "b/nope.txt", abs: join(blocker, "nope.txt"), content: "boom" },
+    ],
+  };
+  assert.throws(() => applyPlanTransactional(plan));
+  assert.ok(!existsSync(newAbs), "newly-created file must be removed on rollback");
 });

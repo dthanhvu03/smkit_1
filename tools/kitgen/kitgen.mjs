@@ -198,7 +198,13 @@ function main() {
   // before (and only if unmodified), never blanket-delete a directory. User-authored
   // files that the kit doesn't generate are always left untouched.
   const force = process.argv.includes("--force");
-  const res = applyBuild({ outDir, outputs, projectDir: PROJECT_DIR, force });
+  let res;
+  try {
+    res = applyBuild({ outDir, outputs, projectDir: PROJECT_DIR, force });
+  } catch (e) {
+    console.error(`Build failed while writing — rolled back, previous output left intact: ${e.message}`);
+    process.exit(1);
+  }
   for (const w of res.warnings) console.error(`WARN: ${w}`);
   console.log(`Built ${outputs.size} file(s) → ${outDir}/  (mode=${cfg.mode}, profile=${cfg.stack?.profile}, lang=${cfg.project?.language})`);
   if (res.deleted) console.log(`  removed ${res.deleted} stale generated file(s)`);
