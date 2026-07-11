@@ -78,6 +78,36 @@ rules/profiles in place.
 | Review + tests before done | encouraged | ✅ | ✅ + QA gate |
 | Human approval (schema/prod/data) | self | if configured | required |
 
+## Capabilities & what they actually mean
+
+Honest table — what is *enforcement* vs *guidance*, and the limits. Full detail in
+[`docs/adr/`](docs/adr/) and the [capability matrix](docs/architecture/target-capability-matrix.md).
+
+| Capability | Type | Enforcement | Limitation |
+|---|---|---|---|
+| Scoped rules | IDE-native | Vendor-dependent | Static/path-scoped, **not** a runtime router |
+| Command guard | Execution hook (`PreToolUse`) | Partial hard enforcement | **Not** a sandbox; env-var/indirection bypass remains |
+| Invariants | Guidance / (future) static-check | Per-invariant `enforcement` field | `guidance` ones are advisory — an agent can ignore them |
+| Drift | Kit-owned doctor | Read-only detection | No auto-fix by default |
+| Regeneration | Kit-owned, manifest-controlled | Deterministic rebuild | Rebuild from source — **not** "self-healing" |
+| Safe generation | Kit-owned | Validate → ownership → transaction | Best-effort rollback, not kernel-atomic (see ADR-002) |
+
+### Threat model (see [ADR-003](docs/adr/ADR-003-guardrail-threat-model.md))
+
+The guard **protects against honest agent mistakes** and blocks the obviously
+catastrophic (`rm -rf .`, `git clean -fdx`, `DROP TABLE`, `curl|sh`, Windows recursive
+deletes, destructive migrations). It does **not**:
+
+- defend against adversarial code running under the same OS user;
+- replace a container, VM, or restricted user;
+- guarantee protection against every shell obfuscation (variable indirection,
+  multi-step download-then-run, encoded payloads);
+- cover effects achieved via file writes if a file policy doesn't cover them (the
+  command guard only sees the Bash tool).
+
+**Run untrusted or high-autonomy agents inside an OS/container sandbox.** The guard is
+defense-in-depth, not the boundary.
+
 ## Languages
 
 Instructions generate in **English by default**; set `language: vi` for Vietnamese. More locales live in `engine/i18n/`.
