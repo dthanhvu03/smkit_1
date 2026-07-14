@@ -163,7 +163,7 @@ test("doctor: unknown agent target → exit 1 (ERROR per adjustment 1)", () => {
   editFile(join(tmp, "kit.config.yaml"), "  - windsurf", "  - windsurf\n  - foo");
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /agent target lạ "foo"/);
+  assert.match(r.stdout, /unknown agent target "foo"/);
 });
 
 test("doctor: missing P0 skill → exit 1", () => {
@@ -172,7 +172,7 @@ test("doctor: missing P0 skill → exit 1", () => {
   runKit(tmp, "build");
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /thiếu skill refactor/);
+  assert.match(r.stdout, /\[SKILLS_P0_MISSING\]/);
 });
 
 test("doctor: enforce=hook gap → exit 1 (no fallback per adjustment 3)", () => {
@@ -181,7 +181,7 @@ test("doctor: enforce=hook gap → exit 1 (no fallback per adjustment 3)", () =>
   rmSync(join(tmp, ".kit", "hooks", "consistency-guard.mjs"), { force: true });
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /enforce=hook nhưng thiếu/);
+  assert.match(r.stdout, /\[RULES_ENFORCE_HOOK_MISSING_FILE\]/);
 });
 
 test("doctor: role without trigger → WARN only, exit 0", () => {
@@ -191,7 +191,7 @@ test("doctor: role without trigger → WARN only, exit 0", () => {
   assert.equal(runKit(tmp, "build").status, 0);
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 0, r.stdout);
-  assert.match(r.stdout, /role "devops" description thiếu/);
+  assert.match(r.stdout, /\[ROLE_DESCRIPTION_TRIGGER_WEAK\]/);
 });
 
 test("doctor: drift detected → exit 1 with actual outDir (adjustment 2)", () => {
@@ -200,7 +200,7 @@ test("doctor: drift detected → exit 1 with actual outDir (adjustment 2)", () =
   editFile(join(tmp, "out", "AGENTS.md"), /# /, "# drifted ");
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /out\/ lệch nguồn/);
+  assert.match(r.stdout, /\[DRIFT\]/);
 });
 
 // ---- F-08 / F-11: doctor drift classification + --json --------------------
@@ -342,7 +342,7 @@ test("dist: doctor flags vendored yaml drift", () => {
   editFile(join(tmp, ".kit", "hooks", "yaml.mjs"), /^/, "// drift\n");
   const r = runKit(tmp, "doctor");
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /hook yaml lệch nguồn/);
+  assert.match(r.stdout, /\[HOOKS_YAML_DRIFT\]/);
 });
 
 test("dist: smkit CLI dispatches check", () => {
@@ -804,7 +804,7 @@ test("build: outDir traversal exits 1 and writes nothing outside project", () =>
   editFile(join(tmp, "kit.config.yaml"), "outDir: out", "outDir: ../../ESCAPE_TEST");
   const r = runKit(tmp, "build");
   assert.equal(r.status, 1);
-  assert.match(r.stderr + r.stdout, /nằm ngoài project/);
+  assert.match(r.stderr + r.stdout, /is outside the project/);
   assert.ok(!existsSync(join(tmp, "..", "..", "ESCAPE_TEST")), "must not write outside the project");
 });
 

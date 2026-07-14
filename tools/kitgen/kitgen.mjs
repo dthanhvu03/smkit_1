@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
 import { applyBuild, classifyDrift } from "./apply.mjs";
-import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings, estimateTokenBudget } from "../../engine/emitter.mjs";
+import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings, estimateTokenBudget, loadDoctorStrings, fmt } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
 // so it works whether the kit is the project root or an installed dep.
@@ -21,6 +21,12 @@ const KIT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const kp = (...s) => join(KIT_DIR, ...s);
 const pp = (...s) => join(PROJECT_DIR, ...s);
+
+// The kit's original default audience is Vietnamese; a project opts into English by
+// setting `project.language: en`. Messages emitted before a config is successfully
+// parsed (Node-too-old, file-missing, parse-error) have no config to read yet, so
+// they always use the default — only messages after that point can honor the setting.
+const langOf = (cfg) => (cfg?.project?.language === "en" ? "en" : "vi");
 
 // ---- doctor ---------------------------------------------------------------
 const HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" }; // enforce:hook rule.id -> hook file
@@ -43,60 +49,64 @@ function runDoctor() {
   const err = (g, m, code) => R.push({ g, level: "error", m, code });
   const clean = (g) => R.filter((r) => r.g === g && r.level !== "ok").length === 0;
 
-  // 1. Node
+  // 1. Node — no config parsed yet, so this always uses the default-language catalog.
+  const strings0 = loadDoctorStrings(KIT_DIR, "vi");
   const nodeMajor = parseInt(process.versions.node, 10);
-  if (nodeMajor >= 18) ok("Node", `node v${process.versions.node} (>= 18)`);
-  else err("Node", `node v${process.versions.node} < 18 -> nâng cấp Node lên >= 18`);
+  if (nodeMajor >= 18) ok("Node", fmt(strings0, "NODE_OK", { version: process.versions.node }), "NODE_OK");
+  else err("Node", fmt(strings0, "NODE_TOO_OLD", { version: process.versions.node }), "NODE_TOO_OLD");
 
   // 2. Config
   let cfg = null;
   const cfgPath = pp("kit.config.yaml");
-  if (!existsSync(cfgPath)) err("Config", "thiếu kit.config.yaml -> chạy: npm run init");
+  if (!existsSync(cfgPath)) err("Config", fmt(strings0, "CONFIG_FILE_MISSING"), "CONFIG_FILE_MISSING");
   else {
     try { cfg = parseYaml(readFileSync(cfgPath, "utf8")); }
-    catch (e) { err("Config", `kit.config.yaml không parse được (${e.message}) -> ${e.hint || "sửa YAML"}`); }
+    catch (e) { err("Config", fmt(strings0, "CONFIG_PARSE_ERROR", { message: e.message, hint: e.hint || "sửa YAML" }), "CONFIG_PARSE_ERROR"); }
   }
+  // Once cfg is known, every subsequent message honors project.language.
+  const lang = langOf(cfg);
+  const strings = loadDoctorStrings(KIT_DIR, lang);
   if (cfg) {
-    const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR });
+    const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR, lang });
     for (const m of warnings) warn("Config", m);
     for (const m of errors) err("Config", m);
-    if (clean("Config")) ok("Config", "kit.config.yaml hợp lệ");
+    if (clean("Config")) ok("Config", fmt(strings, "CONFIG_VALID"), "CONFIG_VALID");
   }
 
   // 3. Paths
   const reqDirs = ["engine/rules", "engine/roles", "engine/commands", "engine/skills", "profiles", ".kit/hooks"];
   const missDirs = reqDirs.filter((d) => !existsSync(kp(d)));
-  if (missDirs.length) for (const d of missDirs) err("Paths", `thiếu thư mục ${d}/`);
-  else ok("Paths", reqDirs.join(", "));
+  if (missDirs.length) for (const d of missDirs) err("Paths", fmt(strings, "PATHS_MISSING_DIR", { dir: d }), "PATHS_MISSING_DIR");
+  else ok("Paths", reqDirs.join(", "), "PATHS_OK");
 
   // 5. Hooks
   const reqHooks = ["guard-shell.mjs", "session-start.mjs", "consistency-guard.mjs", "_lib.mjs", "yaml.mjs"];
   const missHooks = reqHooks.filter((h) => !existsSync(kp(".kit/hooks", h)));
-  if (missHooks.length) for (const h of missHooks) err("Hooks", `thiếu .kit/hooks/${h}`);
+  if (missHooks.length) for (const h of missHooks) err("Hooks", fmt(strings, "HOOKS_MISSING_FILE", { file: h }), "HOOKS_MISSING_FILE");
   // vendored yaml must stay byte-identical to the source parser
   const vend = kp(".kit/hooks/yaml.mjs"), src = kp("tools/kitgen/yaml.mjs");
   if (existsSync(vend) && existsSync(src) && readFileSync(vend, "utf8") !== readFileSync(src, "utf8"))
-    err("Hooks", "hook yaml lệch nguồn -> chạy: cp tools/kitgen/yaml.mjs .kit/hooks/yaml.mjs");
-  if (clean("Hooks")) ok("Hooks", reqHooks.map((h) => h.replace(".mjs", "")).join(", "));
+    err("Hooks", fmt(strings, "HOOKS_YAML_DRIFT"), "HOOKS_YAML_DRIFT");
+  if (clean("Hooks")) ok("Hooks", reqHooks.map((h) => h.replace(".mjs", "")).join(", "), "HOOKS_OK");
 
   // Build once, reused by drift + settings cross-check.
   let outputs = null;
   const outDir = cfg?.outDir || "dist";
   if (cfg) {
     try { outputs = buildOutputs(cfg, { kitDir: KIT_DIR }); }
-    catch (e) { err("Generated output", `không dựng được output để so drift (${e.message})`); }
+    catch (e) { err("Generated output", fmt(strings, "GENERATED_OUTPUT_BUILD_FAILED", { message: e.message }), "GENERATED_OUTPUT_BUILD_FAILED"); }
   }
 
   // 4. Drift — classified against the ownership manifest (F-08).
   if (outputs) {
     const { missing, modified, stale, unexpected } = classifyDrift({ outDir, outputs, projectDir: PROJECT_DIR });
-    for (const r of missing) err("Generated output", `MISSING_OWNED: ${outDir}/${r}`, "MISSING_OWNED");
-    for (const r of modified) err("Generated output", `MODIFIED_OWNED: ${outDir}/${r}`, "MODIFIED_OWNED");
-    for (const r of stale) warn("Generated output", `STALE_OWNED: ${outDir}/${r} -> chạy build để dọn`, "STALE_OWNED");
-    for (const r of unexpected) warn("Generated output", `UNEXPECTED_UNOWNED: ${outDir}/${r} (không do kit sinh; được giữ lại)`, "UNEXPECTED_UNOWNED");
+    for (const r of missing) err("Generated output", fmt(strings, "MISSING_OWNED", { outDir, rel: r }), "MISSING_OWNED");
+    for (const r of modified) err("Generated output", fmt(strings, "MODIFIED_OWNED", { outDir, rel: r }), "MODIFIED_OWNED");
+    for (const r of stale) warn("Generated output", fmt(strings, "STALE_OWNED", { outDir, rel: r }), "STALE_OWNED");
+    for (const r of unexpected) warn("Generated output", fmt(strings, "UNEXPECTED_UNOWNED", { outDir, rel: r }), "UNEXPECTED_UNOWNED");
     const driftN = missing.length + modified.length;
-    if (driftN) err("Generated output", `${outDir}/ lệch nguồn (${driftN} file) -> chạy: npm run build`, "DRIFT");
-    else if (!stale.length && !unexpected.length) ok("Generated output", `${outputs.size} file khớp (${outDir}/)`);
+    if (driftN) err("Generated output", fmt(strings, "GENERATED_OUTPUT_DRIFT", { outDir, count: driftN }), "DRIFT");
+    else if (!stale.length && !unexpected.length) ok("Generated output", fmt(strings, "GENERATED_OUTPUT_MATCH", { count: outputs.size, outDir }), "GENERATED_OUTPUT_MATCH");
   }
 
   // Hooks: settings cross-check (WARN)
@@ -104,7 +114,7 @@ function runDoctor() {
     const refs = (outputs.get(".claude/settings.json") || "").match(/\.kit\/hooks\/([\w.-]+\.mjs)/g) || [];
     for (const ref of new Set(refs)) {
       const f = ref.split("/").pop();
-      if (!existsSync(kp(".kit/hooks", f))) warn("Hooks", `settings tham chiếu hook không tồn tại: ${f}`);
+      if (!existsSync(kp(".kit/hooks", f))) warn("Hooks", fmt(strings, "HOOKS_SETTINGS_HOOK_MISSING", { file: f }), "HOOKS_SETTINGS_HOOK_MISSING");
     }
   }
 
@@ -113,19 +123,19 @@ function runDoctor() {
   try { rules = collectRules(KIT_DIR, cfg || {}); } catch { /* ignore */ }
   const gateSkillExists = () => { try { return collectSkills(KIT_DIR).some((s) => OUTPUT_SECTION.test(s.body)); } catch { return false; } };
   for (const r of rules) {
-    if (!r.enforce) { warn("Rules (enforce)", `rule "${r.id}" thiếu nhãn enforce`); continue; }
-    for (const tok of String(r.enforce).split("+").map((t) => t.trim())) {
+    if (!r.enforce) { warn("Rules (enforce)", fmt(strings, "RULES_ENFORCE_MISSING_LABEL", { id: r.id }), "RULES_ENFORCE_MISSING_LABEL"); continue; }
+    for (const tok of String(r.enforce).split("+").map((tk) => tk.trim())) {
       if (tok === "agent-read") continue;
-      else if (tok === "generator") { if (!existsSync(kp("tools/kitgen/kitgen.mjs"))) err("Rules (enforce)", `rule "${r.id}" enforce=generator nhưng thiếu tools/kitgen/kitgen.mjs`); }
-      else if (tok === "gate") { if (!gateSkillExists()) err("Rules (enforce)", `rule "${r.id}" enforce=gate nhưng không skill nào có mục output format`); }
+      else if (tok === "generator") { if (!existsSync(kp("tools/kitgen/kitgen.mjs"))) err("Rules (enforce)", fmt(strings, "RULES_ENFORCE_GENERATOR_MISSING", { id: r.id }), "RULES_ENFORCE_GENERATOR_MISSING"); }
+      else if (tok === "gate") { if (!gateSkillExists()) err("Rules (enforce)", fmt(strings, "RULES_ENFORCE_GATE_NO_SKILL", { id: r.id }), "RULES_ENFORCE_GATE_NO_SKILL"); }
       else if (tok === "hook") {
         const mapped = HOOK_MAP[r.id];
-        if (!mapped) warn("Rules (enforce)", `rule "${r.id}" enforce=hook nhưng chưa có mapping hook (bổ sung HOOK_MAP)`);
-        else if (!existsSync(kp(".kit/hooks", mapped))) err("Rules (enforce)", `rule "${r.id}" enforce=hook nhưng thiếu .kit/hooks/${mapped}`);
-      } else warn("Rules (enforce)", `rule "${r.id}" enforce="${tok}" không nhận diện`);
+        if (!mapped) warn("Rules (enforce)", fmt(strings, "RULES_ENFORCE_HOOK_UNMAPPED", { id: r.id }), "RULES_ENFORCE_HOOK_UNMAPPED");
+        else if (!existsSync(kp(".kit/hooks", mapped))) err("Rules (enforce)", fmt(strings, "RULES_ENFORCE_HOOK_MISSING_FILE", { id: r.id, hookFile: mapped }), "RULES_ENFORCE_HOOK_MISSING_FILE");
+      } else warn("Rules (enforce)", fmt(strings, "RULES_ENFORCE_TOKEN_UNRECOGNIZED", { id: r.id, tok }), "RULES_ENFORCE_TOKEN_UNRECOGNIZED");
     }
   }
-  if (rules.length && clean("Rules (enforce)")) ok("Rules (enforce)", `${rules.length} rule enforce hợp lệ`);
+  if (rules.length && clean("Rules (enforce)")) ok("Rules (enforce)", fmt(strings, "RULES_ENFORCE_OK", { count: rules.length }), "RULES_ENFORCE_OK");
 
   // 7. Skills P0
   let skills = [];
@@ -133,14 +143,17 @@ function runDoctor() {
   const byId = new Map(skills.map((s) => [s.id, s]));
   for (const id of ["code-review", "refactor", "test-design"]) {
     const s = byId.get(id);
-    if (!s) { err("Skills", `thiếu skill ${id}`); continue; }
-    if (!s.description) warn("Skills", `skill ${id} thiếu description`);
-    if (!OUTPUT_SECTION.test(s.body)) warn("Skills", `skill ${id} thiếu mục output format`);
+    if (!s) { err("Skills", fmt(strings, "SKILLS_P0_MISSING", { id }), "SKILLS_P0_MISSING"); continue; }
+    if (!s.description) warn("Skills", fmt(strings, "SKILLS_P0_DESCRIPTION_MISSING", { id }), "SKILLS_P0_DESCRIPTION_MISSING");
+    if (!OUTPUT_SECTION.test(s.body)) warn("Skills", fmt(strings, "SKILLS_P0_OUTPUT_SECTION_MISSING", { id }), "SKILLS_P0_OUTPUT_SECTION_MISSING");
   }
   // Skill schema / migration / target-capability warnings — each carries its own code.
+  // NOTE: these structured warnings' .message is constructed in emitter.mjs and is not
+  // yet routed through the doctor.yaml catalog (a deliberately scoped-out residual gap
+  // — see the commit message / audit notes), so this line is not language-aware yet.
   for (const w of collectBuildWarnings(KIT_DIR, cfg || {}))
     warn("Skills", `[${w.target}] ${w.field} @ ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`, w.code || "SKILL_SCHEMA");
-  if (clean("Skills")) ok("Skills", "code-review, refactor, test-design");
+  if (clean("Skills")) ok("Skills", fmt(strings, "SKILLS_P0_OK"), "SKILLS_P0_OK");
 
   // 8. Roles
   let roles = [];
@@ -148,11 +161,13 @@ function runDoctor() {
   for (const role of roles) {
     const fm = role.fm || {};
     const n = fm.name || "?";
-    if (!fm.description || !/use when|invoke for/i.test(fm.description)) warn("Roles", `role "${n}" description thiếu "Use when/Invoke for"`);
-    if (!fm.model) warn("Roles", `role "${n}" thiếu model`);
-    if (!fm.tools) warn("Roles", `role "${n}" thiếu tools`);
+    // The multilingual, heuristic trigger-cue check now lives in validateRoleGovernance
+    // (ROLE_DESCRIPTION_TRIGGER_WEAK, surfaced under "Config" above) — this legacy
+    // check stayed English-literal-only and would just duplicate it less accurately.
+    if (!fm.model) warn("Roles", fmt(strings, "ROLES_MODEL_MISSING", { name: n }), "ROLES_MODEL_MISSING");
+    if (!fm.tools) warn("Roles", fmt(strings, "ROLES_TOOLS_MISSING", { name: n }), "ROLES_TOOLS_MISSING");
   }
-  if (roles.length && clean("Roles")) ok("Roles", `${roles.length} role có description trigger + model + tools`);
+  if (roles.length && clean("Roles")) ok("Roles", fmt(strings, "ROLES_OK", { count: roles.length }), "ROLES_OK");
 
   const errCount = R.filter((r) => r.level === "error").length;
   const warnCount = R.filter((r) => r.level === "warn").length;
@@ -229,7 +244,7 @@ function main() {
 
   // Validate BEFORE touching the filesystem. A bad config must never produce a
   // partial or out-of-bounds generation, so we stop here — no mkdir/rm/write ran yet.
-  const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR });
+  const { errors, warnings } = validateConfig(cfg, { kitDir: KIT_DIR, projectDir: PROJECT_DIR, lang: langOf(cfg) });
   for (const w of warnings) console.error(`WARN: ${w}`);
   if (errors.length) {
     console.error(`Invalid kit.config.yaml — nothing was generated (${mode}):`);

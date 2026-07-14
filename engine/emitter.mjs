@@ -29,6 +29,41 @@ export function loadStrings(kitDir, lang) {
   return parseYaml(readFileSync(existsSync(f) ? f : fb, "utf8"));
 }
 
+// Doctor/build diagnostic message catalog. Defaults to "vi" (the kit's original
+// default audience) when not given — every governance validator below accepts an
+// OPTIONAL trailing `lang` parameter for exactly this reason: existing callers that
+// don't pass one keep getting byte-identical Vietnamese text; kitgen.mjs (the actual
+// CLI) is the one place that computes `lang` from `cfg.project.language` and passes
+// it through explicitly.
+const DOCTOR_STRINGS_CACHE = new Map();
+export function loadDoctorStrings(kitDir, lang = "vi") {
+  const key = `${kitDir}::${lang}`;
+  if (DOCTOR_STRINGS_CACHE.has(key)) return DOCTOR_STRINGS_CACHE.get(key);
+  const f = join(kitDir, "engine", "i18n", lang, "doctor.yaml");
+  const fb = join(kitDir, "engine", "i18n", "vi", "doctor.yaml");
+  const strings = parseYaml(readFileSync(existsSync(f) ? f : fb, "utf8"));
+  DOCTOR_STRINGS_CACHE.set(key, strings);
+  return strings;
+}
+
+// Render one CODE with named {placeholder} substitution. Named `fmt`, not the more
+// conventional `t`, because several loops below already use `t` as a loop variable
+// (e.g. "for (const t of ...preApprovedTools)") — a same-named import would be
+// silently shadowed inside those scopes. Never throws and never goes silent: an
+// unknown code still surfaces as "[CODE]" rather than vanishing, so a missing catalog
+// entry is visible/greppable instead of a blank message.
+export function fmt(strings, code, params = {}) {
+  const template = strings[code];
+  if (!template) return `[${code}]`;
+  // `k in params` (property EXISTENCE), not `params[k] !== undefined` (value check):
+  // a param explicitly passed as `undefined` must still render as the string
+  // "undefined" — matching what the original template-literal interpolation did
+  // (`` `stack.profile "${profile}"` `` with profile===undefined produced the literal
+  // text "undefined", not a dropped/blank value). Only a param never passed at all
+  // (key absent) falls back to the literal "{key}" placeholder.
+  return String(template).replace(/\{(\w+)\}/g, (_, k) => (k in params ? String(params[k]) : `{${k}}`));
+}
+
 // Profile rules may override an engine rule with the same id by declaring
 // `override: true` (mirrors the invariant override mechanism) — replaces the engine
 // rule in place rather than leaving both, so it does not also trip the id-conflict
@@ -98,31 +133,32 @@ function gateSkillExists(kitDir) {
 // with no gate skill), and no two rules across engine+profile may share an id (there is
 // no project-layer override for rules the way invariants have one, so any collision is
 // always a conflict). Pure/read-only.
-export function validateRuleGovernance(kitDir, cfg) {
+export function validateRuleGovernance(kitDir, cfg, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const errors = [];
   const warnings = [];
-  const err = (code, msg) => errors.push(`[${code}] ${msg}`);
-  const wrn = (code, msg) => warnings.push(`[${code}] ${msg}`);
+  const err = (code, params) => errors.push(`[${code}] ${fmt(strings, code, params)}`);
+  const wrn = (code, params) => warnings.push(`[${code}] ${fmt(strings, code, params)}`);
   const seen = new Set();
 
   for (const r of collectRules(kitDir, cfg || {})) {
-    if (!r.id) { err("RULE_ID_MISSING", `rule thiếu id (title="${r.title || "?"}")`); continue; }
-    if (seen.has(r.id)) err("RULE_ID_CONFLICT", `rule id "${r.id}" trùng lặp giữa engine/profile -> đổi tên id (hoặc thêm 'override: true' nếu profile cố ý ghi đè)`);
+    if (!r.id) { err("RULE_ID_MISSING", { title: r.title || "?" }); continue; }
+    if (seen.has(r.id)) err("RULE_ID_CONFLICT", { id: r.id });
     seen.add(r.id);
     checkSchemaVersion("RULE", r.schemaVersion, `rule "${r.id}"`, err, wrn);
 
     const { activation, enforcement } = ruleEffective(r);
     if (!RULE_ACTIVATION_MODES.includes(activation.mode))
-      err("RULE_ACTIVATION_MODE_INVALID", `rule "${r.id}": activation.mode "${activation.mode}" không hợp lệ -> dùng ${RULE_ACTIVATION_MODES.join(" | ")}`);
+      err("RULE_ACTIVATION_MODE_INVALID", { id: r.id, mode: activation.mode, modes: RULE_ACTIVATION_MODES.join(" | ") });
     if (!enforcement.type || !RULE_ENFORCEMENT_TYPES.includes(enforcement.type))
-      err("RULE_ENFORCEMENT_TYPE_INVALID", `rule "${r.id}": enforcement.type "${enforcement.type}" không hợp lệ -> dùng ${RULE_ENFORCEMENT_TYPES.join(" | ")}`);
+      err("RULE_ENFORCEMENT_TYPE_INVALID", { id: r.id, type: enforcement.type, types: RULE_ENFORCEMENT_TYPES.join(" | ") });
     else if (enforcement.type === "hook") {
       const mapped = RULE_HOOK_MAP[r.id];
-      if (!mapped) err("RULE_HOOK_UNMAPPED", `rule "${r.id}": enforcement.type=hook nhưng chưa có mapping trong RULE_HOOK_MAP`);
+      if (!mapped) err("RULE_HOOK_UNMAPPED", { id: r.id });
       else if (!existsSync(join(kitDir, ".kit/hooks", mapped)))
-        err("RULE_HOOK_MISSING", `rule "${r.id}": enforcement.type=hook nhưng thiếu .kit/hooks/${mapped}`);
+        err("RULE_HOOK_MISSING", { id: r.id, hookFile: mapped });
     } else if (enforcement.type === "static-check" && !gateSkillExists(kitDir)) {
-      err("RULE_STATIC_CHECK_NO_BACKING", `rule "${r.id}": enforcement.type=static-check nhưng không skill nào có mục output format`);
+      err("RULE_STATIC_CHECK_NO_BACKING", { id: r.id });
     }
   }
   return { errors, warnings };
@@ -389,23 +425,26 @@ const SUPPORTED_SCHEMA_VERSIONS = { SKILL: [1], ROLE: [1], RULE: [1] };
 function checkSchemaVersion(kind, value, tag, err, wrn) {
   if (value === undefined) return;
   if (!Number.isInteger(value) || value < 1) {
-    err(`${kind}_SCHEMA_VERSION_INVALID`, `${tag}: schemaVersion "${value}" không hợp lệ -> phải là số nguyên dương`);
+    err(`${kind}_SCHEMA_VERSION_INVALID`, { tag, value });
     return;
   }
   if (!SUPPORTED_SCHEMA_VERSIONS[kind].includes(value))
-    wrn(`${kind}_SCHEMA_VERSION_UNKNOWN`, `${tag}: schemaVersion ${value} chưa được kit hỗ trợ (hỗ trợ: ${SUPPORTED_SCHEMA_VERSIONS[kind].join(", ")}) -> kiểm tra tương thích trước khi dùng`);
+    wrn(`${kind}_SCHEMA_VERSION_UNKNOWN`, { tag, value, supported: SUPPORTED_SCHEMA_VERSIONS[kind].join(", ") });
 }
 
 // Governance rules a skill must not violate — checked BEFORE generation (build fails,
 // nothing is written) so a skill can never self-escalate beyond its declared trust
 // tier, misrepresent its pinned content, or request a self-contradictory permission.
 // Pure/read-only. Each message is tagged `[CODE]` so it stays greppable/testable while
-// validateConfig's plain-string-array return shape is unchanged.
-export function validateSkillGovernance(kitDir) {
+// validateConfig's plain-string-array return shape is unchanged. `lang` defaults to
+// "vi" so existing callers that don't pass one keep getting identical text —
+// kitgen.mjs is the one place that computes the real project language and passes it.
+export function validateSkillGovernance(kitDir, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const errors = [];
   const warnings = [];
-  const err = (code, msg) => errors.push(`[${code}] ${msg}`);
-  const wrn = (code, msg) => warnings.push(`[${code}] ${msg}`);
+  const err = (code, params) => errors.push(`[${code}] ${fmt(strings, code, params)}`);
+  const wrn = (code, params) => warnings.push(`[${code}] ${fmt(strings, code, params)}`);
 
   for (const s of collectSkills(kitDir)) {
     const gov = s.gov || {};
@@ -415,46 +454,46 @@ export function validateSkillGovernance(kitDir) {
 
     // Agent Skills spec: name (forced = directory) must be lowercase alnum+hyphen, ≤64.
     if (!NAME_RE.test(s.id) || s.id.length > 64)
-      err("SKILL_NAME_FORMAT_INVALID", `${tag}: directory name không hợp lệ theo Agent Skills spec (chỉ a-z0-9-, không bắt đầu/kết thúc bằng '-', không '--', tối đa 64 ký tự)`);
+      err("SKILL_NAME_FORMAT_INVALID", { tag });
 
     // Agent Skills spec: description is required, non-empty, ≤1024 chars — an ERROR
     // (spec violation), separate from Claude's own ≤1536 listing cap (a WARNING below).
-    if (!s.description) err("SKILL_DESCRIPTION_MISSING", `${tag}: thiếu description (bắt buộc theo Agent Skills spec)`);
+    if (!s.description) err("SKILL_DESCRIPTION_MISSING", { tag });
     else if (s.description.length > SKILL_DESC_SPEC_LIMIT)
-      err("SKILL_DESCRIPTION_TOO_LONG", `${tag}: description dài ${s.description.length} ký tự (>${SKILL_DESC_SPEC_LIMIT}, giới hạn Agent Skills spec) -> rút gọn, đưa chi tiết vào references/`);
+      err("SKILL_DESCRIPTION_TOO_LONG", { tag, length: s.description.length, limit: SKILL_DESC_SPEC_LIMIT });
 
     const listingLen = (s.description || "").length + (s.when_to_use || "").length;
     if (listingLen > SKILL_LISTING_LIMIT)
-      wrn("SKILL_DESCRIPTION_LISTING_TOO_LONG", `${tag}: description+when_to_use dài ${listingLen} ký tự (>${SKILL_LISTING_LIMIT}, giới hạn hiển thị của Claude) -> sẽ bị cắt bớt trong skill listing`);
+      wrn("SKILL_DESCRIPTION_LISTING_TOO_LONG", { tag, length: listingLen, limit: SKILL_LISTING_LIMIT });
 
     const triggerText = `${s.description || ""} ${s.when_to_use || ""}`;
     if (s.description && !TRIGGER_CUES.some((re) => re.test(triggerText)))
-      wrn("SKILL_DESCRIPTION_TRIGGER_WEAK", `${tag}: description/when_to_use không có cue kích hoạt rõ ràng (vd "use when", "invoke", "dùng khi") -> agent có thể khó chọn đúng skill (heuristic, có thể false positive)`);
+      wrn("SKILL_DESCRIPTION_TRIGGER_WEAK", { tag });
 
     if (tier !== undefined && !SKILL_TRUST_TIERS.includes(tier))
-      err("SKILL_TRUST_TIER_INVALID", `${tag}: trustTier "${tier}" không hợp lệ -> dùng ${SKILL_TRUST_TIERS.join(" | ")}`);
+      err("SKILL_TRUST_TIER_INVALID", { tag, tier, tiers: SKILL_TRUST_TIERS.join(" | ") });
 
     if (HIGH_RISK_TIERS.has(tier)) {
       if (gov.invocation?.implicit !== false)
-        err("SKILL_TRUST_TIER_AUTO_INVOKE", `${tag}: trustTier ${tier} phải manual-only -> đặt invocation.implicit: false trong skill.kit.yaml`);
+        err("SKILL_TRUST_TIER_AUTO_INVOKE", { tag, tier });
 
       const hashField = gov.provenance?.contentHash;
       if (!hashField) {
-        err("SKILL_TRUST_TIER_MISSING_HASH", `${tag}: trustTier ${tier} thiếu provenance.contentHash -> pin nội dung bằng hash trước khi dùng`);
+        err("SKILL_TRUST_TIER_MISSING_HASH", { tag, tier });
       } else {
         const m = HASH_RE.exec(String(hashField));
         if (!m) {
-          err("SKILL_HASH_FORMAT_INVALID", `${tag}: provenance.contentHash "${hashField}" sai định dạng -> dùng "sha256:<hex>" hoặc "sha512:<hex>"`);
+          err("SKILL_HASH_FORMAT_INVALID", { tag, hashField });
         } else {
           const algo = m[1].toLowerCase();
           const hex = m[2];
           if (hex.length !== HASH_HEXLEN[algo]) {
-            err("SKILL_HASH_ALGO_LENGTH_MISMATCH", `${tag}: contentHash có ${hex.length} hex char, không khớp độ dài chuẩn của ${algo} (${HASH_HEXLEN[algo]})`);
+            err("SKILL_HASH_ALGO_LENGTH_MISMATCH", { tag, hexLen: hex.length, algo, expectedLen: HASH_HEXLEN[algo] });
           } else {
             let actual = null;
             try { actual = computeSkillContentHash(kitDir, s.id, algo); } catch { /* files unreadable — leave actual null, no false mismatch */ }
             if (actual !== null && actual.toLowerCase() !== hex.toLowerCase())
-              err("SKILL_HASH_MISMATCH", `${tag}: contentHash không khớp nội dung thực tế (declared=${hex.slice(0, 12)}… actual=${actual.slice(0, 12)}…) -> nội dung đã đổi kể từ khi pin, cập nhật hash sau khi review lại`);
+              err("SKILL_HASH_MISMATCH", { tag, declared: hex.slice(0, 12), actual: actual.slice(0, 12) });
           }
         }
       }
@@ -462,10 +501,10 @@ export function validateSkillGovernance(kitDir) {
 
     const requested = new Set(gov.permissions?.requestedTools || []);
     const denied = new Set(gov.permissions?.deniedTools || []);
-    for (const t of gov.permissions?.preApprovedTools || []) {
-      if (denied.has(t)) err("SKILL_PERMISSION_CONTRADICTION", `${tag}: tool "${t}" vừa deniedTools vừa preApprovedTools -> mâu thuẫn`);
-      else if (requested.size && !requested.has(t))
-        err("SKILL_PERMISSION_UNREQUESTED", `${tag}: preApprovedTools "${t}" không nằm trong requestedTools -> khai báo requestedTools trước`);
+    for (const tool of gov.permissions?.preApprovedTools || []) {
+      if (denied.has(tool)) err("SKILL_PERMISSION_CONTRADICTION", { tag, tool });
+      else if (requested.size && !requested.has(tool))
+        err("SKILL_PERMISSION_UNREQUESTED", { tag, tool });
     }
   }
   return { errors, warnings };
@@ -476,11 +515,12 @@ export function validateSkillGovernance(kitDir) {
 // exist or that cannot be preloaded (Claude skips a `disable-model-invocation` skill and
 // only logs a debug warning — the kit surfaces this loudly instead, at build time).
 // Pure/read-only. Same `[CODE]`-tagged message convention as validateSkillGovernance.
-export function validateRoleGovernance(kitDir) {
+export function validateRoleGovernance(kitDir, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const errors = [];
   const warnings = [];
-  const err = (code, msg) => errors.push(`[${code}] ${msg}`);
-  const wrn = (code, msg) => warnings.push(`[${code}] ${msg}`);
+  const err = (code, params) => errors.push(`[${code}] ${fmt(strings, code, params)}`);
+  const wrn = (code, params) => warnings.push(`[${code}] ${fmt(strings, code, params)}`);
   const skillById = new Map(collectSkills(kitDir).map((s) => [s.id, s]));
 
   for (const role of collectRoles(kitDir)) {
@@ -491,34 +531,34 @@ export function validateRoleGovernance(kitDir) {
     checkSchemaVersion("ROLE", fm.schemaVersion, tag, err, wrn);
 
     const allowSet = new Set(eff.allowTools);
-    for (const t of eff.denyTools)
-      if (allowSet.has(t)) err("ROLE_PERMISSION_CONTRADICTION", `${tag}: tool "${t}" vừa allowTools vừa denyTools -> mâu thuẫn`);
+    for (const tool of eff.denyTools)
+      if (allowSet.has(tool)) err("ROLE_PERMISSION_CONTRADICTION", { tag, tool });
 
     if (eff.permissionMode !== undefined && !ROLE_PERMISSION_MODES.includes(eff.permissionMode))
-      err("ROLE_PERMISSION_MODE_INVALID", `${tag}: permissions.mode "${eff.permissionMode}" không hợp lệ -> dùng ${ROLE_PERMISSION_MODES.join(" | ")}`);
+      err("ROLE_PERMISSION_MODE_INVALID", { tag, mode: eff.permissionMode, modes: ROLE_PERMISSION_MODES.join(" | ") });
     if (eff.isolation !== undefined && !ROLE_ISOLATION_MODES.includes(eff.isolation))
-      err("ROLE_ISOLATION_INVALID", `${tag}: runtime.isolation "${eff.isolation}" không hợp lệ -> dùng ${ROLE_ISOLATION_MODES.join(" | ")}`);
+      err("ROLE_ISOLATION_INVALID", { tag, mode: eff.isolation, modes: ROLE_ISOLATION_MODES.join(" | ") });
     if (eff.effort !== undefined && !ROLE_EFFORT_LEVELS.includes(eff.effort))
-      err("ROLE_EFFORT_INVALID", `${tag}: runtime.effort "${eff.effort}" không hợp lệ -> dùng ${ROLE_EFFORT_LEVELS.join(" | ")}`);
+      err("ROLE_EFFORT_INVALID", { tag, effort: eff.effort, levels: ROLE_EFFORT_LEVELS.join(" | ") });
     if (eff.memoryScope !== undefined && !ROLE_MEMORY_SCOPES.includes(eff.memoryScope))
-      err("ROLE_MEMORY_SCOPE_INVALID", `${tag}: memory.scope "${eff.memoryScope}" không hợp lệ -> dùng ${ROLE_MEMORY_SCOPES.join(" | ")}`);
+      err("ROLE_MEMORY_SCOPE_INVALID", { tag, scope: eff.memoryScope, scopes: ROLE_MEMORY_SCOPES.join(" | ") });
     if (eff.maxTurns !== undefined && (!Number.isInteger(eff.maxTurns) || eff.maxTurns < 1))
-      err("ROLE_MAX_TURNS_INVALID", `${tag}: runtime.maxTurns phải là số nguyên dương`);
+      err("ROLE_MAX_TURNS_INVALID", { tag });
 
     for (const sid of eff.skillsPreload) {
       const skill = skillById.get(sid);
-      if (!skill) { err("ROLE_SKILL_PRELOAD_BROKEN_REFERENCE", `${tag}: preload skill "${sid}" không tồn tại`); continue; }
+      if (!skill) { err("ROLE_SKILL_PRELOAD_BROKEN_REFERENCE", { tag, sid }); continue; }
       if (skill.gov?.invocation?.implicit === false)
-        err("ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT", `${tag}: skill "${sid}" có disable-model-invocation (manual-only) -> không thể preload (Claude sẽ bỏ qua và chỉ ghi log debug)`);
+        err("ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT", { tag, sid });
     }
 
-    if (!fm.description) wrn("ROLE_DESCRIPTION_MISSING", `${tag}: thiếu description`);
+    if (!fm.description) wrn("ROLE_DESCRIPTION_MISSING", { tag });
     else if (!TRIGGER_CUES.some((re) => re.test(fm.description)))
-      wrn("ROLE_DESCRIPTION_TRIGGER_WEAK", `${tag}: description không có cue rõ ràng cho việc delegate (vd "use when", "invoke for", "dùng khi") -> agent khó tự chọn role (heuristic, có thể false positive)`);
+      wrn("ROLE_DESCRIPTION_TRIGGER_WEAK", { tag });
 
     for (const sec of eff.outputRequiredSections) {
       if (!new RegExp(`##\\s*${sec}`, "i").test(role.body))
-        wrn("ROLE_OUTPUT_SECTION_MISSING", `${tag}: body thiếu mục output bắt buộc "${sec}"`);
+        wrn("ROLE_OUTPUT_SECTION_MISSING", { tag, section: sec });
     }
   }
   return { errors, warnings };
@@ -530,7 +570,8 @@ export function validateRoleGovernance(kitDir) {
 // `enforcement` (guidance|static-check|hook|ci|unsupported) defaults to guidance.
 const INV_ENFORCEMENT = new Set(["guidance", "static-check", "hook", "ci", "unsupported"]);
 
-export function collectInvariants(kitDir, cfg) {
+export function collectInvariants(kitDir, cfg, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const out = [];
   const byId = new Map();
   const add = (inv, layer) => {
@@ -538,13 +579,13 @@ export function collectInvariants(kitDir, cfg) {
     const id = inv.id || `invariant-${slug(inv.path || inv.rule)}`;
     const enforcement = inv.enforcement || "guidance";
     if (!INV_ENFORCEMENT.has(enforcement))
-      throw new Error(`invariant "${id}": enforcement "${enforcement}" invalid -> ${[...INV_ENFORCEMENT].join(" | ")}`);
+      throw new Error(fmt(strings, "INVARIANT_ENFORCEMENT_INVALID", { id, enforcement, allowed: [...INV_ENFORCEMENT].join(" | ") }));
     const rec = { ...inv, id, enforcement, layer };
     const prev = byId.get(id);
     if (prev) {
       const canOverride = layer === "project" && inv.override === true && prev.layer !== "project";
       if (!canOverride)
-        throw new Error(`invariant id conflict: "${id}" (${prev.layer} vs ${layer}) -> set 'override: true' on the project invariant to replace, or rename its id`);
+        throw new Error(fmt(strings, "INVARIANT_ID_CONFLICT", { id, prevLayer: prev.layer, layer }));
       out.splice(out.indexOf(prev), 1);
     }
     byId.set(id, rec);

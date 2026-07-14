@@ -6,7 +6,8 @@
 // error BEFORE creating, deleting, or writing anything.
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
-import { collectInvariants, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance } from "../../engine/emitter.mjs";
+import { fileURLToPath } from "node:url";
+import { collectInvariants, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, loadDoctorStrings, fmt } from "../../engine/emitter.mjs";
 
 export const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 export const MODES = ["vibe", "standard", "strict"];
@@ -42,36 +43,45 @@ export function resolveOutDir(projectDir, outDir) {
 // Validate a parsed config. Returns { errors:[], warnings:[] } of message strings.
 // `kitDir` enables the profile-exists check; `projectDir` enables the outDir
 // boundary check. Messages are the single source doctor prints and build fails on.
-export function validateConfig(cfg, { kitDir, projectDir } = {}) {
+// `lang` defaults to "vi" (the kit's original default) so existing callers that don't
+// pass one keep getting identical text; kitgen.mjs computes the real project language
+// (from cfg.project.language) and passes it through explicitly.
+export function validateConfig(cfg, { kitDir, projectDir, lang = "vi" } = {}) {
   const errors = [];
   const warnings = [];
   cfg = cfg || {};
+  // Falls back to the kit's own repo root when no kitDir is given (e.g. a bare
+  // validateConfig(cfg) call with no options) so the catalog can still be found.
+  const strings = loadDoctorStrings(kitDir || join(dirname(fileURLToPath(import.meta.url)), "..", ".."), lang);
 
-  if (!cfg.version) warnings.push("thiếu 'version'");
-  if (!cfg.project?.name) warnings.push("thiếu 'project.name'");
+  if (!cfg.version) warnings.push(fmt(strings, "CONFIG_VERSION_MISSING"));
+  if (!cfg.project?.name) warnings.push(fmt(strings, "CONFIG_PROJECT_NAME_MISSING"));
 
   if (!MODES.includes(cfg.mode))
-    errors.push(`mode "${cfg.mode}" không hợp lệ -> dùng: ${MODES.join(" | ")}`);
+    errors.push(fmt(strings, "CONFIG_MODE_INVALID", { mode: cfg.mode, modes: MODES.join(" | ") }));
 
   const profile = cfg.stack?.profile;
+  let profileMissing = false;
   if (kitDir) {
-    if (!profile || !existsSync(join(kitDir, "profiles", profile, "profile.yaml")))
-      errors.push(`stack.profile "${profile}" không tồn tại -> xem profiles/`);
+    if (!profile || !existsSync(join(kitDir, "profiles", profile, "profile.yaml"))) {
+      profileMissing = true;
+      errors.push(fmt(strings, "CONFIG_PROFILE_NOT_FOUND", { profile }));
+    }
   }
 
   const agents = Array.isArray(cfg.agents) ? cfg.agents : [];
-  if (!agents.length) errors.push("'agents' rỗng -> khai báo ít nhất một target");
+  if (!agents.length) errors.push(fmt(strings, "CONFIG_AGENTS_EMPTY"));
   for (const a of agents)
     if (!KNOWN_AGENTS.includes(a))
-      errors.push(`agent target lạ "${a}" -> dùng: ${KNOWN_AGENTS.join(", ")}`);
+      errors.push(fmt(strings, "CONFIG_AGENT_UNKNOWN", { agent: a, known: KNOWN_AGENTS.join(", ") }));
 
   if (cfg.outDir !== undefined && typeof cfg.outDir !== "string")
-    warnings.push("'outDir' không phải string -> mặc định 'dist'");
+    warnings.push(fmt(strings, "CONFIG_OUTDIR_NOT_STRING"));
 
   // Invariant merge (engine→profile→project): surface id conflicts and bad
   // enforcement values here, BEFORE any generation, so a conflict fails cleanly.
-  if (kitDir && !errors.some((e) => e.includes("stack.profile"))) {
-    try { collectInvariants(kitDir, cfg); }
+  if (kitDir && !profileMissing) {
+    try { collectInvariants(kitDir, cfg, lang); }
     catch (e) { errors.push(e.message); }
   }
 
@@ -79,7 +89,7 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
   // tier (T3/T4 must be manual-only + content-hashed) or request a self-contradictory
   // permission (pre-approved yet denied, or pre-approved without being requested).
   if (kitDir) {
-    const sg = validateSkillGovernance(kitDir);
+    const sg = validateSkillGovernance(kitDir, lang);
     errors.push(...sg.errors);
     warnings.push(...sg.warnings);
   }
@@ -88,7 +98,7 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
   // boundary, an invalid enum value, or preload a skill that doesn't exist / can't be
   // preloaded (a disable-model-invocation skill).
   if (kitDir) {
-    const rg = validateRoleGovernance(kitDir);
+    const rg = validateRoleGovernance(kitDir, lang);
     errors.push(...rg.errors);
     warnings.push(...rg.warnings);
   }
@@ -97,7 +107,7 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
   // (hook with no hook file, static-check with no gate skill), and no two rules across
   // engine+profile may share an id.
   if (kitDir) {
-    const ruleG = validateRuleGovernance(kitDir, cfg);
+    const ruleG = validateRuleGovernance(kitDir, cfg, lang);
     errors.push(...ruleG.errors);
     warnings.push(...ruleG.warnings);
   }
@@ -108,7 +118,7 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
     const outDir = typeof cfg.outDir === "string" ? cfg.outDir : "dist";
     const { outside, abs } = resolveOutDir(projectDir, outDir);
     if (outside)
-      errors.push(`outDir "${outDir}" nằm ngoài project (${abs}) -> chọn một thư mục bên trong project`);
+      errors.push(fmt(strings, "CONFIG_OUTDIR_OUTSIDE_PROJECT", { outDir, abs }));
   }
 
   return { errors, warnings };
