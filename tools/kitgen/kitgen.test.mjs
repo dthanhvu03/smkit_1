@@ -13,7 +13,7 @@ import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget } from "../../engine/emitter.mjs";
-import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
+import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLDEN = join(KIT, "test", "golden");
@@ -89,6 +89,33 @@ test("guard: safe command allowed", () => {
 test("guard: makeMatcher is case-insensitive & bounded", () => {
   assert.ok(makeMatcher("DROP TABLE").test("... DROP table x"));
   assert.ok(!makeMatcher("rm -rf").test("warm -rfoo")); // boundary
+});
+
+// ---- pre-build critique gate (trụ cột #2) ---------------------------------
+test("critique gate: exempt paths (kit/docs/config/generated) are never gated", () => {
+  for (const p of [".kit/state/gate.json", "docs/x.md", "README.md", "src/note.md",
+    "kit.config.yaml", "dist/AGENTS.md", ".claude/settings.json", "package-lock.json"]) {
+    assert.ok(isGateExempt(p), `${p} should be exempt`);
+    // even in strict with no token, an exempt path must pass
+    assert.equal(critiqueGateDecision({ relPath: p, mode: "strict", hasToken: false }).decision, "allow");
+  }
+});
+test("critique gate: an unknown/empty path fails OPEN (never blocks)", () => {
+  assert.ok(isGateExempt(""));
+  assert.equal(critiqueGateDecision({ relPath: "", mode: "strict", hasToken: false }).decision, "allow");
+});
+test("critique gate: code write in standard/strict is DENIED without a token", () => {
+  for (const mode of ["standard", "strict"]) {
+    const r = critiqueGateDecision({ relPath: "src/app.ts", mode, hasToken: false });
+    assert.equal(r.decision, "deny", mode);
+    assert.match(r.reason, /\.kit\/state\/gate\.json/);
+  }
+});
+test("critique gate: a valid token opens the gate; vibe never blocks (reminds)", () => {
+  assert.equal(critiqueGateDecision({ relPath: "src/app.ts", mode: "strict", hasToken: true }).decision, "allow");
+  const vibe = critiqueGateDecision({ relPath: "src/app.ts", mode: "vibe", hasToken: false });
+  assert.equal(vibe.decision, "allow");
+  assert.match(vibe.reason, /reminder/i); // vibe = nudge, not block
 });
 
 // ---- golden-file snapshot of full generated output ------------------------
@@ -941,7 +968,7 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
   assert.ok(b.alwaysLoaded.roleCatalog.items.length === 8, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 7, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 8, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);

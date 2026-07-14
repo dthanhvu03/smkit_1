@@ -29,7 +29,7 @@ const pp = (...s) => join(PROJECT_DIR, ...s);
 const langOf = (cfg) => (cfg?.project?.language === "en" ? "en" : "vi");
 
 // ---- doctor ---------------------------------------------------------------
-const HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" }; // enforce:hook rule.id -> hook file
+const HOOK_MAP = { "consistency-guard": "consistency-guard.mjs", "critique-gate": "critique-gate.mjs" }; // enforce:hook rule.id -> hook file
 
 // Mask secret-looking values in doctor messages before they reach --json output.
 // Doctor messages are paths/config today; this is a safeguard, not the primary defense.
@@ -80,7 +80,7 @@ function runDoctor() {
   else ok("Paths", reqDirs.join(", "), "PATHS_OK");
 
   // 5. Hooks
-  const reqHooks = ["guard-shell.mjs", "session-start.mjs", "consistency-guard.mjs", "_lib.mjs", "yaml.mjs"];
+  const reqHooks = ["guard-shell.mjs", "session-start.mjs", "consistency-guard.mjs", "critique-gate.mjs", "_lib.mjs", "yaml.mjs"];
   const missHooks = reqHooks.filter((h) => !existsSync(kp(".kit/hooks", h)));
   if (missHooks.length) for (const h of missHooks) err("Hooks", fmt(strings, "HOOKS_MISSING_FILE", { file: h }), "HOOKS_MISSING_FILE");
   // vendored yaml must stay byte-identical to the source parser

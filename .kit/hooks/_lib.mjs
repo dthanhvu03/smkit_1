@@ -286,6 +286,55 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
   return warn || { decision: "allow", reason: "", segment: "" };
 }
 
+// ---- Pre-build critique gate (trụ cột #2) ---------------------------------
+// A PreToolUse(Write|Edit) gate: in standard/strict, block the first code write of a
+// session until the change has been critiqued (a token is recorded). vibe only reminds.
+// These paths are NEVER gated — kit internals (so writing the token / brief / Decision
+// Log is never blocked), docs/notes, generated agent config, build output, config &
+// lockfiles. Everything else is treated as "code/work" worth challenging first.
+export const GATE_EXEMPT = [
+  /(^|\/)\.kit(\/|$)/, /(^|\/)\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
+  /(^|\/)(dist|build|out|coverage)(\/|$)/,
+  /(^|\/)\.(claude|cursor|github|windsurf|agents)(\/|$)/,
+  /(^|\/)docs(\/|$)/,
+  /\.(md|mdx|markdown|txt)$/i,
+  /(^|\/)kit\.config\.ya?ml$/i,
+  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|composer\.lock)$/i,
+  /(^|\/)(\.gitignore|LICENSE|README[^/]*)$/i,
+];
+
+// Is this write path exempt from the critique gate? Empty/unknown path → exempt
+// (fail open: never block on a path we cannot read).
+export function isGateExempt(relPath) {
+  const p = String(relPath || "").replace(/\\/g, "/");
+  if (!p) return true;
+  return GATE_EXEMPT.some((re) => re.test(p));
+}
+
+// Decide the pre-build critique gate for one Write/Edit. Pure (no fs). The hook reads
+// the mode + token state and passes them in.
+//   { decision: "allow" | "deny", reason, exempt? }
+export function critiqueGateDecision({ relPath, mode = "vibe", hasToken = false } = {}) {
+  if (isGateExempt(relPath)) return { decision: "allow", reason: "", exempt: true };
+  if (hasToken) return { decision: "allow", reason: "" };
+  if (mode !== "standard" && mode !== "strict")
+    return {
+      decision: "allow",
+      reason:
+        "Pre-build reminder: have you challenged this change — correctness, security & data, " +
+        "consistency, simplicity/necessity, reversibility? Run /challenge to make it a habit.",
+    };
+  return {
+    decision: "deny",
+    reason:
+      `Pre-build critique required in ${mode} mode. Before writing code for a new task, challenge it ` +
+      "through the lenses (correctness · security & data · consistency · simplicity/necessity · " +
+      "reversibility) — run /challenge or the pre-build-critique skill — then record the verdict to " +
+      ".kit/state/gate.json (a JSON object with a non-empty \"decision\"). This runs once per session; " +
+      "edits flow after it. Docs, .kit, and config paths are never gated.",
+  };
+}
+
 // Append one JSONL decision line to .kit/audit.log (best-effort; not tamper-evident).
 export function auditLog(entry, projDir = projectDir) {
   try { appendFileSync(join(projDir, ".kit", "audit.log"), JSON.stringify(entry) + "\n"); }

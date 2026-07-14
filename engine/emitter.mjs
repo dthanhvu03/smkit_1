@@ -95,7 +95,7 @@ export function collectRules(kitDir, cfg) {
 // are a superset of the kit's original scope/paths/enforce frontmatter, which stays fully
 // supported and is auto-derived into the new shape when the new fields are absent.
 // `id.` maps rule.id -> the hook filename actually enforcing it (enforce:hook only).
-export const RULE_HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" };
+export const RULE_HOOK_MAP = { "consistency-guard": "consistency-guard.mjs", "critique-gate": "critique-gate.mjs" };
 export const RULE_OUTPUT_SECTION = /output format|required output|final output/i;
 export const RULE_ACTIVATION_MODES = ["always", "path", "glob", "model-decision", "manual"];
 export const RULE_ENFORCEMENT_TYPES = ["guidance", "static-check", "hook", "ci", "permission", "sandbox", "unsupported"];
@@ -763,6 +763,7 @@ function emitSettings(cfg, S) {
       PreToolUse: [
         { matcher: "Bash", hooks: [{ type: "command", command: hookCmd("guard-shell.mjs") }] },
         { matcher: "Write|Edit", hooks: [{ type: "command", command: hookCmd("consistency-guard.mjs") }] },
+        { matcher: "Write|Edit", hooks: [{ type: "command", command: hookCmd("critique-gate.mjs") }] },
       ],
     },
   };

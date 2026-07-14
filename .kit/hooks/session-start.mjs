@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 // SessionStart hook. Injects the Constitution + Decision Log into context so the
 // agent is bound by prior decisions WITHOUT relying on it to remember to read them.
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { projectDir } from "./_lib.mjs";
+
+// Reset the pre-build critique gate each session: the first code write of a new session
+// must go through a fresh critique (trụ cột #2). Best-effort — never throw at startup.
+try { rmSync(join(projectDir, ".kit", "state", "gate.json"), { force: true }); } catch { /* best-effort */ }
 
 function read(p, max) {
   try {
