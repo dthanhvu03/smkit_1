@@ -17,7 +17,7 @@ Get the kit into your project, then run the setup interview.
 
 ```bash
 # Option A — scaffold into a new folder (no install), then answer a few questions:
-npx degit <your-org>/universal-agent-kit my-app
+npx degit dthanhvu03/smkit_1 my-app
 cd my-app
 npm run init          # or: node tools/kitgen/init.mjs
 
