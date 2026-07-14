@@ -186,7 +186,7 @@ function runDoctor() {
     const items = R.filter((r) => r.g === g);
     if (!items.length) continue;
     console.log(g);
-    for (const it of items) console.log(`${sym[it.level]} ${it.m}`);
+    for (const it of items) console.log(`${sym[it.level]}${it.code ? ` [${it.code}]` : ""} ${it.m}`);
   }
   const errs = R.filter((r) => r.level === "error").length;
   const warns = R.filter((r) => r.level === "warn").length;
@@ -240,7 +240,7 @@ function main() {
   const outDir = cfg.outDir || "dist";
   // Surface skill schema / capability-drop warnings (never silent).
   for (const w of collectBuildWarnings(KIT_DIR, cfg))
-    console.error(`WARN [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
+    console.error(`WARN [${w.code || "SKILL_SCHEMA"}] [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
 
   if (mode === "check") {

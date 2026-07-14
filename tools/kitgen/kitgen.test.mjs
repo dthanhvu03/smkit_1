@@ -5,8 +5,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, cpSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, cpSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir, platform } from "node:os";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
@@ -1002,4 +1002,127 @@ test("rule override: a same-id profile rule WITHOUT override:true is a genuine c
   const built = runKit(tmp, "build");
   assert.equal(built.status, 1);
   assert.ok(!existsSync(join(tmp, "out")), "no output for an unintentional rule id collision");
+});
+
+// ============================================================================
+// Security: symlink/junction escape via skill supporting files (scripts/references/
+// assets) — reproduced and fixed after finding it during a hardening review. A skill's
+// supporting files must stay self-contained; a link resolving outside the skill's own
+// folder must never be followed into generated output.
+// ============================================================================
+function trySymlink(target, linkPath) {
+  try {
+    symlinkSync(target, linkPath, platform() === "win32" ? "junction" : undefined);
+    return true;
+  } catch {
+    return false; // e.g. restricted CI sandbox with no link privilege — test skips itself
+  }
+}
+
+test("security: a symlink/junction inside a skill's scripts/ pointing outside the skill is excluded, not leaked", (t) => {
+  const tmp = copyKit();
+  const outsideDir = join(tmp, "..", `outside-secret-${process.pid}`);
+  mkdirSync(outsideDir, { recursive: true });
+  writeFileSync(join(outsideDir, "leak.txt"), "TOP SECRET — must never appear in generated output");
+
+  const skillDir = join(tmp, "engine", "skills", "leaky");
+  mkdirSync(join(skillDir, "scripts"), { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"), "---\nname: leaky\ndescription: Use when demoing a link escape.\n---\n\n# Leaky\n");
+
+  if (!trySymlink(outsideDir, join(skillDir, "scripts", "linked"))) {
+    t.skip("could not create a symlink/junction in this environment (no link privilege)");
+    return;
+  }
+
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 0, "build must otherwise succeed — only the escaping entry is excluded");
+  const leakedAnywhere = (() => {
+    try { return readFileSync(join(tmp, "out", ".claude", "skills", "leaky", "scripts", "linked", "leak.txt"), "utf8"); }
+    catch { return null; }
+  })();
+  assert.equal(leakedAnywhere, null, "the linked file must NOT be copied into generated output");
+  assert.match(r.stderr + r.stdout, /SKILL_SUPPORTING_FILE_ESCAPES_ROOT/, "exclusion must be warned, never silent");
+  // the skill's own SKILL.md must still emit normally — only the escaping entry is dropped
+  assert.ok(existsSync(join(tmp, "out", ".claude", "skills", "leaky", "SKILL.md")));
+});
+
+test("security: computeSkillContentHash (used for T3/T4 pinning) also excludes escaping entries from its hash scope", () => {
+  const tmp = copyKit();
+  const outsideDir = join(tmp, "..", `outside-hash-${process.pid}`);
+  mkdirSync(outsideDir, { recursive: true });
+  writeFileSync(join(outsideDir, "x.txt"), "external content");
+  const skillDir = join(tmp, "engine", "skills", "pinned");
+  mkdirSync(join(skillDir, "scripts"), { recursive: true });
+  const md = "---\nname: pinned\ndescription: Use when demoing pinned hash scope.\n---\n\n# Pinned\n";
+  writeFileSync(join(skillDir, "SKILL.md"), md);
+  const hashWithoutLink = createHash("sha256").update(md, "utf8").digest("hex");
+  if (!trySymlink(outsideDir, join(skillDir, "scripts", "linked"))) return; // best-effort; core case covered above
+  writeFileSync(join(skillDir, "skill.kit.yaml"),
+    `schemaVersion: 1\nid: pinned\ntrustTier: T3\ninvocation:\n  implicit: false\nprovenance:\n  contentHash: "sha256:${hashWithoutLink}"\n`);
+  // If the escaping entry leaked into the hash scope, this declared (link-free) hash
+  // would mismatch and validation would fail — it must NOT, proving the hash scope
+  // also excludes the escaping link.
+  assert.deepEqual(validateSkillGovernance(tmp).errors, []);
+});
+
+// ============================================================================
+// Correctness: UTF-8 BOM handling in the YAML/frontmatter parser
+// ============================================================================
+test("BOM: a leading UTF-8 BOM does not break kit.config.yaml parsing", () => {
+  const bomYaml = "﻿version: 2\nmode: vibe\n";
+  const cfg = parseYaml(bomYaml);
+  assert.equal(cfg.version, 2, "BOM must not get baked into the first key");
+  assert.equal(cfg.mode, "vibe");
+});
+
+test("BOM: a leading UTF-8 BOM does not break SKILL.md / role / rule frontmatter parsing", () => {
+  const bomMd = "﻿---\nname: bom-skill\ndescription: Use when demoing BOM handling.\n---\n\n# Body\n";
+  const { fm, body } = parseFrontmatter(bomMd);
+  assert.equal(fm.name, "bom-skill", "frontmatter must still be recognized, not silently dropped");
+  assert.match(body, /# Body/);
+});
+
+test("BOM: a real BOM-prefixed skill (as Windows tools commonly save) builds correctly end-to-end", () => {
+  const tmp = copyKit();
+  const skillDir = join(tmp, "engine", "skills", "bom-real");
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(join(skillDir, "SKILL.md"),
+    "﻿---\nname: bom-real\ndescription: Use when demoing a real BOM-prefixed file.\n---\n\n# BOM real\n");
+  const r = runKit(tmp, "build");
+  assert.equal(r.status, 0);
+  const out = readFileSync(join(tmp, "out", ".claude", "skills", "bom-real", "SKILL.md"), "utf8");
+  assert.match(out, /name: "bom-real"/, "description/name must not be lost due to the BOM");
+});
+
+// ============================================================================
+// Doctor: unexpected-file detection must recurse into a skill's nested supporting
+// directories (scripts/nested/...), not just one level deep — while never flagging a
+// user's own sibling skill folder living directly under the shared .claude/skills/.
+// ============================================================================
+test("doctor: a stray file inside a nested supporting-file subdirectory is detected as UNEXPECTED_UNOWNED", () => {
+  const tmp = copyKit();
+  mkdirSync(join(tmp, "engine", "skills", "nested-skill", "scripts", "nested"), { recursive: true });
+  writeFileSync(join(tmp, "engine", "skills", "nested-skill", "SKILL.md"),
+    "---\nname: nested-skill\ndescription: Use when demoing nested supporting files.\n---\n\n# Nested skill\n");
+  writeFileSync(join(tmp, "engine", "skills", "nested-skill", "scripts", "nested", "deep.txt"), "content\n");
+  runKit(tmp, "build");
+  // Stray file placed directly in scripts/ — a SIBLING of nested/, one level up from
+  // the only known leaf (scripts/nested/deep.txt). A shallow one-level scan would miss it.
+  writeFileSync(join(tmp, "out", ".claude", "skills", "nested-skill", "scripts", "sneaky.txt"), "sneaky\n");
+  const r = runKit(tmp, "doctor", "--json");
+  const j = JSON.parse(r.stdout);
+  assert.ok(j.results.some((x) => x.code === "UNEXPECTED_UNOWNED" && x.message.includes("sneaky.txt")),
+    "stray file in an intermediate nested directory must be detected");
+});
+
+test("doctor: a user's own sibling skill folder directly under .claude/skills/ is never flagged", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  mkdirSync(join(tmp, "out", ".claude", "skills", "my-own-skill"), { recursive: true });
+  writeFileSync(join(tmp, "out", ".claude", "skills", "my-own-skill", "SKILL.md"), "my own content, not kit-generated\n");
+  const r = runKit(tmp, "doctor", "--json");
+  const j = JSON.parse(r.stdout);
+  assert.ok(!j.results.some((x) => x.message?.includes("my-own-skill")),
+    "a user's own unrelated skill folder must never be flagged as unexpected");
+  assert.equal(j.summary.errors, 0);
 });

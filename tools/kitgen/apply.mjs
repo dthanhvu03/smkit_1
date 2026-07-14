@@ -31,8 +31,31 @@ export function classifyDrift({ outDir, outputs, projectDir }) {
     if (!outputs.has(rel) && existsSync(pp(rel))) stale.push(rel);
   }
 
+  // Directories to scan for stray files. For most categories this is just the
+  // immediate parent of each known path (unchanged, original behavior). Skills can now
+  // have supporting files nested arbitrarily deep (scripts/references/assets), so for
+  // those we walk every ancestor level UP TO AND INCLUDING the skill's own folder
+  // (".claude/skills/<id>" / ".agents/skills/<id>") — catching a stray file placed in
+  // an intermediate subdirectory that the shallow one-level scan would miss — but we
+  // deliberately STOP there, never climbing to the shared "skills" parent itself, where
+  // a user's own unrelated, hand-added skill may legitimately live (never flagged).
+  const ancestorDirsFor = (rel) => {
+    const parts = rel.split("/");
+    const skillsIdx = parts.findIndex((p, i) => p === "skills" && (parts[i - 1] === ".claude" || parts[i - 1] === ".agents"));
+    if (skillsIdx === -1) return [dirname(rel)];
+    const stopAt = parts.slice(0, skillsIdx + 2).join("/"); // .claude/skills/<id>
+    const dirs = [];
+    let d = dirname(rel);
+    while (d && d !== ".") {
+      dirs.push(d);
+      if (d === stopAt) break;
+      d = dirname(d);
+    }
+    return dirs;
+  };
+
   const known = new Set([...outputs.keys(), ...Object.keys(prev)]);
-  const ownedDirs = new Set([...known].map(dirname).filter((d) => d && d !== "."));
+  const ownedDirs = new Set([...known].flatMap(ancestorDirsFor).filter((d) => d && d !== "."));
   for (const d of ownedDirs) {
     if (!existsSync(pp(d))) continue;
     for (const f of readdirSync(pp(d))) {

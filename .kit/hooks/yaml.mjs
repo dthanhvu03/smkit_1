@@ -150,7 +150,17 @@ function parseNode(lines, idx, indent) {
   return [map, idx];
 }
 
+// Strip a leading UTF-8 BOM (U+FEFF). Real-world reproduction: Windows tools commonly
+// write it by default (Notepad, PowerShell's `Out-File -Encoding utf8`, some editors'
+// "UTF-8" save option) — without this, the BOM lands inside the first parsed key
+// (e.g. "﻿version" instead of "version") or breaks parseFrontmatter's `^---` match
+// entirely, silently discarding the whole frontmatter block (fm:{}, body:wholeFile).
+function stripBOM(text) {
+  return typeof text === "string" && text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
 export function parseYaml(text) {
+  text = stripBOM(text);
   preScan(text);
   const lines = text.split(/\r?\n/).map(stripComment).filter((l) => l.trim() !== "");
   const [val] = parseNode(lines, 0, 0);
@@ -158,6 +168,7 @@ export function parseYaml(text) {
 }
 
 export function parseFrontmatter(text) {
+  text = stripBOM(text);
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!m) return { fm: {}, body: text };
   return { fm: parseYaml(m[1]), body: m[2] };

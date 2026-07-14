@@ -9,8 +9,8 @@
 //
 // Zero new deps: reuses the kit's own YAML parser.
 import { parseYaml, parseFrontmatter } from "../tools/kitgen/yaml.mjs";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
+import { join, dirname, relative, isAbsolute, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 
@@ -192,10 +192,32 @@ const SUPPORT_SUBDIRS = ["scripts", "references", "assets"]; // NOT tests/ (neve
 const TRIVIAL_PATH_PATTERNS = new Set(["**/*", "**", "*"]);
 const isTrivialPathSet = (paths) => Array.isArray(paths) && paths.some((p) => TRIVIAL_PATH_PATTERNS.has(p));
 
-function listFilesRec(base, prefix = "") {
+// Recursively list files under `base`, refusing to follow any entry whose REAL
+// (resolved) path escapes `root` — this is a symlink/junction/hardlink escape guard,
+// not just a `isSymbolicLink()` check: on this platform a directory symlink reports
+// `isDirectory()===true` AND `isSymbolicLink()===false` via fs.Dirent, so type-flag
+// checks alone do not catch it (reproduced and confirmed). A skill's scripts/
+// references/assets are meant to be fully self-contained; an entry resolving outside
+// the skill's own folder is excluded and reported via `warn`, never silently included
+// (arbitrary filesystem content would otherwise be copied verbatim into generated,
+// committed output — a real, reproduced leak).
+function listFilesRec(base, root, prefix = "", warn = () => {}) {
   const out = [];
+  const rootReal = realpathSync(root);
   for (const e of readdirSync(base, { withFileTypes: true })) {
-    if (e.isDirectory()) out.push(...listFilesRec(join(base, e.name), `${prefix}${e.name}/`));
+    const abs = join(base, e.name);
+    let real;
+    try { real = realpathSync(abs); }
+    catch { continue; } // broken link / unreadable — exclude, nothing to leak
+    const rel = relative(rootReal, real);
+    const escapes = rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel);
+    if (escapes) {
+      warn({ target: "skill", field: "supporting-file", source: abs, code: "SKILL_SUPPORTING_FILE_ESCAPES_ROOT",
+        message: `"${prefix}${e.name}" resolves outside the skill's own folder (real path: ${real}) and is excluded`,
+        remediation: "keep scripts/references/assets self-contained inside the skill folder; do not symlink outside it" });
+      continue;
+    }
+    if (e.isDirectory()) out.push(...listFilesRec(abs, root, `${prefix}${e.name}/`, warn));
     else out.push(prefix + e.name);
   }
   return out;
@@ -259,10 +281,13 @@ function normalizeSkill(kitDir, d, warn) {
   }
 
   // supporting resources (scripts/references/assets), emitted alongside SKILL.md.
+  // Containment-checked against the skill's own folder (see listFilesRec) — a symlink
+  // pointing outside it is excluded and warned, never silently copied into output.
+  const skillRoot = join(kitDir, SKILLS_DIR, d);
   const supporting = [];
   for (const sub of SUPPORT_SUBDIRS) {
-    const abs = join(kitDir, SKILLS_DIR, d, sub);
-    if (existsSync(abs)) for (const f of listFilesRec(abs)) supporting.push({ rel: `${sub}/${f}`, abs: join(abs, f) });
+    const abs = join(skillRoot, sub);
+    if (existsSync(abs)) for (const f of listFilesRec(abs, skillRoot, "", warn)) supporting.push({ rel: `${sub}/${f}`, abs: join(abs, f) });
   }
 
   return {
@@ -350,7 +375,7 @@ function computeSkillContentHash(kitDir, id, algorithm) {
   const files = [];
   for (const sub of SUPPORT_SUBDIRS) {
     const abs = join(dir, sub);
-    if (existsSync(abs)) for (const f of listFilesRec(abs)) files.push(`${sub}/${f}`);
+    if (existsSync(abs)) for (const f of listFilesRec(abs, dir)) files.push(`${sub}/${f}`);
   }
   files.sort();
   for (const rel of files) parts.push(`${rel.length}:${rel}\n${readFileSync(join(dir, rel), "utf8")}`);
