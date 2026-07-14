@@ -11,6 +11,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
+import { KNOWN_AGENTS } from "./validate.mjs"; // single source of truth for supported targets
 
 // KIT_DIR = the kit's own files (profiles/, templates, kitgen). PROJECT_DIR = the
 // project being set up, where config + memory are written and the build runs.
@@ -52,10 +53,10 @@ answers.name = await ask({ key: "name", q: "What is your project called?" }, "My
 answers.purpose = await ask({ key: "purpose", q: "In one sentence, what does it do?" }, "");
 answers.users = await ask({ key: "users", q: "Who will use it?" }, "");
 answers.never = await ask({ key: "never", q: "One thing it must NEVER do?" }, "");
-answers.stack = await ask({ key: "stack", q: "Which stack?" }, profiles.includes("nextjs") ? "nextjs" : "generic", profiles);
+answers.stack = await ask({ key: "stack", q: "Which stack?" }, profiles.includes("generic") ? "generic" : profiles[0], profiles);
 answers.mode = await ask({ key: "mode", q: "How strict?" }, "vibe", ["vibe", "standard", "strict"]);
 answers.lang = await ask({ key: "lang", q: "Language for instructions?" }, "en", ["en", "vi"]);
-answers.agents = await ask({ key: "agents", q: "Which AI tools?" }, "claude,cursor", ["claude", "cursor"]);
+answers.agents = await ask({ key: "agents", q: "Which AI tools? (comma-separated; agentsmd = the open AGENTS.md standard, read by Codex / Gemini CLI)" }, "claude,cursor", KNOWN_AGENTS);
 if (rl) rl.close();
 
 const agentsList = answers.agents.split(",").map((s) => s.trim()).filter(Boolean);
