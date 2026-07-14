@@ -42,6 +42,7 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 
 ## Skills
 - **code-review** — Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
+- **cross-review** — Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
 - **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
 - **guard-design** — Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
 - **pre-build-critique** — Use BEFORE writing or editing code for a new or non-trivial change. Invoke to challenge the change through fixed lenses — correctness, security & data, consistency, simplicity, reversibility — and record a go/adjust/stop verdict before building.
@@ -56,4 +57,5 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - `/decide` — Append a technical decision to the Decision Log so future sessions stay consistent.
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
+- `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
 - `/start` — Begin (or resume) work. Reads the project memory, plans the smallest next step, and builds it per the current mode.
