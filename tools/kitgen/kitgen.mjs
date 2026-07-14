@@ -148,10 +148,7 @@ function runDoctor() {
     if (!OUTPUT_SECTION.test(s.body)) warn("Skills", fmt(strings, "SKILLS_P0_OUTPUT_SECTION_MISSING", { id }), "SKILLS_P0_OUTPUT_SECTION_MISSING");
   }
   // Skill schema / migration / target-capability warnings — each carries its own code.
-  // NOTE: these structured warnings' .message is constructed in emitter.mjs and is not
-  // yet routed through the doctor.yaml catalog (a deliberately scoped-out residual gap
-  // — see the commit message / audit notes), so this line is not language-aware yet.
-  for (const w of collectBuildWarnings(KIT_DIR, cfg || {}))
+  for (const w of collectBuildWarnings(KIT_DIR, cfg || {}, lang))
     warn("Skills", `[${w.target}] ${w.field} @ ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`, w.code || "SKILL_SCHEMA");
   if (clean("Skills")) ok("Skills", fmt(strings, "SKILLS_P0_OK"), "SKILLS_P0_OK");
 
@@ -254,7 +251,7 @@ function main() {
 
   const outDir = cfg.outDir || "dist";
   // Surface skill schema / capability-drop warnings (never silent).
-  for (const w of collectBuildWarnings(KIT_DIR, cfg))
+  for (const w of collectBuildWarnings(KIT_DIR, cfg, langOf(cfg)))
     console.error(`WARN [${w.code || "SKILL_SCHEMA"}] [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
 

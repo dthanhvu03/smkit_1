@@ -237,7 +237,7 @@ const isTrivialPathSet = (paths) => Array.isArray(paths) && paths.some((p) => TR
 // the skill's own folder is excluded and reported via `warn`, never silently included
 // (arbitrary filesystem content would otherwise be copied verbatim into generated,
 // committed output — a real, reproduced leak).
-function listFilesRec(base, root, prefix = "", warn = () => {}) {
+function listFilesRec(base, root, prefix = "", warn = () => {}, strings = null) {
   const out = [];
   const rootReal = realpathSync(root);
   for (const e of readdirSync(base, { withFileTypes: true })) {
@@ -248,12 +248,13 @@ function listFilesRec(base, root, prefix = "", warn = () => {}) {
     const rel = relative(rootReal, real);
     const escapes = rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel);
     if (escapes) {
+      const name = `${prefix}${e.name}`;
       warn({ target: "skill", field: "supporting-file", source: abs, code: "SKILL_SUPPORTING_FILE_ESCAPES_ROOT",
-        message: `"${prefix}${e.name}" resolves outside the skill's own folder (real path: ${real}) and is excluded`,
-        remediation: "keep scripts/references/assets self-contained inside the skill folder; do not symlink outside it" });
+        message: fmt(strings, "SKILL_SUPPORTING_FILE_ESCAPES_ROOT", { name, real }),
+        remediation: fmt(strings, "SKILL_SUPPORTING_FILE_ESCAPES_ROOT_REMEDIATION") });
       continue;
     }
-    if (e.isDirectory()) out.push(...listFilesRec(abs, root, `${prefix}${e.name}/`, warn));
+    if (e.isDirectory()) out.push(...listFilesRec(abs, root, `${prefix}${e.name}/`, warn, strings));
     else out.push(prefix + e.name);
   }
   return out;
@@ -263,13 +264,16 @@ function listFilesRec(base, root, prefix = "", warn = () => {}) {
 // open standard — metadata is string→string only) plus an optional kit governance
 // sidecar (skill.kit.yaml). Old single-file skills (id/paths/related_*) are migrated
 // in-memory for one release, each divergence recorded as a warning (never silent).
-function normalizeSkill(kitDir, d, warn) {
+function normalizeSkill(kitDir, d, warn, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const { fm, body } = parseFrontmatter(readAt(kitDir, join(SKILLS_DIR, d, "SKILL.md")));
   const src = `${SKILLS_DIR}/${d}/SKILL.md`;
 
   // name MUST equal the directory (Agent Skills identity + command name).
   if (fm.name && fm.name !== d)
-    warn({ target: "skill", field: "name", source: src, code: "SKILL_NAME_MISMATCH", message: `name "${fm.name}" != directory "${d}"; using the directory name`, remediation: "set SKILL.md name to the folder name" });
+    warn({ target: "skill", field: "name", source: src, code: "SKILL_NAME_MISMATCH",
+      message: fmt(strings, "SKILL_NAME_MISMATCH", { name: fm.name, dir: d }),
+      remediation: fmt(strings, "SKILL_NAME_MISMATCH_REMEDIATION") });
 
   // `paths` is NOT part of the Agent Skills open standard (activation there is
   // description-based). Claude Code DOES support `paths` as a verified vendor extension
@@ -280,10 +284,14 @@ function normalizeSkill(kitDir, d, warn) {
   let claudePaths;
   if (fm.paths) {
     if (isTrivialPathSet(fm.paths)) {
-      warn({ target: "skill", field: "paths", source: src, code: "SKILL_PATHS_TRIVIAL_DROPPED", message: `"paths" matches everything (no real gate); dropped as a no-op from portable SKILL.md`, remediation: "omit paths entirely if no activation gating is intended" });
+      warn({ target: "skill", field: "paths", source: src, code: "SKILL_PATHS_TRIVIAL_DROPPED",
+        message: fmt(strings, "SKILL_PATHS_TRIVIAL_DROPPED"),
+        remediation: fmt(strings, "SKILL_PATHS_TRIVIAL_DROPPED_REMEDIATION") });
     } else {
       claudePaths = fm.paths;
-      warn({ target: "skill", field: "paths", source: src, code: "SKILL_PATHS_MIGRATED_VENDOR_OVERLAY", message: `"paths" is not an Agent Skills field; migrated to the Claude-only activation overlay (skill.kit.yaml activation.claude.paths)`, remediation: "declare it as activation.claude.paths in skill.kit.yaml going forward" });
+      warn({ target: "skill", field: "paths", source: src, code: "SKILL_PATHS_MIGRATED_VENDOR_OVERLAY",
+        message: fmt(strings, "SKILL_PATHS_MIGRATED_VENDOR_OVERLAY"),
+        remediation: fmt(strings, "SKILL_PATHS_MIGRATED_VENDOR_OVERLAY_REMEDIATION") });
     }
   }
 
@@ -292,7 +300,9 @@ function normalizeSkill(kitDir, d, warn) {
   if (fm.metadata && typeof fm.metadata === "object" && !Array.isArray(fm.metadata)) {
     for (const [k, v] of Object.entries(fm.metadata)) {
       if (v !== null && typeof v === "object")
-        warn({ target: "skill", field: `metadata.${k}`, source: src, code: "SKILL_METADATA_NOT_STRING", message: "metadata must be string→string; complex value ignored", remediation: "move it to skill.kit.yaml" });
+        warn({ target: "skill", field: `metadata.${k}`, source: src, code: "SKILL_METADATA_NOT_STRING",
+          message: fmt(strings, "SKILL_METADATA_NOT_STRING"),
+          remediation: fmt(strings, "SKILL_METADATA_NOT_STRING_REMEDIATION") });
       else metadata[String(k)] = String(v);
     }
   }
@@ -313,7 +323,9 @@ function normalizeSkill(kitDir, d, warn) {
       ...(claudePaths ? { activation: { claude: { paths: claudePaths } } } : {}),
     };
     if (fm.related_roles || fm.related_rules)
-      warn({ target: "skill", field: "related_*", source: src, code: "SKILL_RELATED_FIELDS_NONSTANDARD", message: "related_roles/related_rules are non-standard and are dropped from SKILL.md", remediation: "declare them in skill.kit.yaml" });
+      warn({ target: "skill", field: "related_*", source: src, code: "SKILL_RELATED_FIELDS_NONSTANDARD",
+        message: fmt(strings, "SKILL_RELATED_FIELDS_NONSTANDARD"),
+        remediation: fmt(strings, "SKILL_RELATED_FIELDS_NONSTANDARD_REMEDIATION") });
   }
 
   // supporting resources (scripts/references/assets), emitted alongside SKILL.md.
@@ -323,7 +335,7 @@ function normalizeSkill(kitDir, d, warn) {
   const supporting = [];
   for (const sub of SUPPORT_SUBDIRS) {
     const abs = join(skillRoot, sub);
-    if (existsSync(abs)) for (const f of listFilesRec(abs, skillRoot, "", warn)) supporting.push({ rel: `${sub}/${f}`, abs: join(abs, f) });
+    if (existsSync(abs)) for (const f of listFilesRec(abs, skillRoot, "", warn, strings)) supporting.push({ rel: `${sub}/${f}`, abs: join(abs, f) });
   }
 
   return {
@@ -334,12 +346,12 @@ function normalizeSkill(kitDir, d, warn) {
 }
 
 // Collect all skills. `warn` is an optional sink for migration/validation warnings.
-export function collectSkills(kitDir, warn = () => {}) {
+export function collectSkills(kitDir, warn = () => {}, lang = "vi") {
   if (!existsSync(join(kitDir, SKILLS_DIR))) return [];
   return readdirSync(join(kitDir, SKILLS_DIR))
     .filter((d) => existsSync(join(kitDir, SKILLS_DIR, d, "SKILL.md")))
     .sort()
-    .map((d) => normalizeSkill(kitDir, d, warn));
+    .map((d) => normalizeSkill(kitDir, d, warn, lang));
 }
 
 function readTargetCapabilities(kitDir, agent) {
@@ -350,7 +362,8 @@ function readTargetCapabilities(kitDir, agent) {
 // A skill can declare a real constraint — manual-only invocation, Claude-only
 // path-gated activation — that a configured target has no verified equivalent for.
 // Never silently drop: warn which target/skill/field is affected and why.
-function checkSkillTargetCapabilities(kitDir, cfg, skills, warn) {
+function checkSkillTargetCapabilities(kitDir, cfg, skills, warn, lang = "vi") {
+  const strings = loadDoctorStrings(kitDir, lang);
   const targets = Array.isArray(cfg?.agents) ? cfg.agents : [];
   const capCache = new Map();
   const capOf = (agent) => {
@@ -367,22 +380,22 @@ function checkSkillTargetCapabilities(kitDir, cfg, skills, warn) {
       const support = capOf(agent)?.features || {};
       if (manualOnly && support.invocationControl !== "supported")
         warn({ target: agent, field: "invocation.implicit", source: sidecar, code: "SKILL_INVOCATION_CONTROL_UNSUPPORTED_TARGET",
-          message: `target "${agent}" chưa xác nhận hỗ trợ chặn auto-invoke (invocationControl=${support.invocationControl || "unknown"}) — skill "${s.id}" có thể vẫn tự động kích hoạt dù khai báo manual-only`,
-          remediation: `verify khả năng của "${agent}" hoặc không emit skill này cho target đó` });
+          message: fmt(strings, "SKILL_INVOCATION_CONTROL_UNSUPPORTED_TARGET", { agent, support: support.invocationControl || "unknown", id: s.id }),
+          remediation: fmt(strings, "SKILL_INVOCATION_CONTROL_UNSUPPORTED_TARGET_REMEDIATION", { agent }) });
       if (pathGate?.length && support.pathGatedSkillActivation !== "supported")
         warn({ target: agent, field: "activation.claude.paths", source: sidecar, code: "SKILL_PATH_GATE_UNSUPPORTED_TARGET",
-          message: `path-gated activation cho skill "${s.id}" là vendor extension của Claude — target "${agent}" chưa xác nhận có cơ chế tương đương, skill sẽ luôn kích hoạt theo description`,
-          remediation: `cân nhắc bổ sung một Rule path-scoped tương ứng cho target "${agent}"` });
+          message: fmt(strings, "SKILL_PATH_GATE_UNSUPPORTED_TARGET", { id: s.id, agent }),
+          remediation: fmt(strings, "SKILL_PATH_GATE_UNSUPPORTED_TARGET_REMEDIATION", { agent }) });
     }
   }
 }
 
 // Re-run skill collection purely to gather warnings (used by build + doctor to surface
 // capability drops / migration notices without changing buildOutputs' Map contract).
-export function collectBuildWarnings(kitDir, cfg = {}) {
+export function collectBuildWarnings(kitDir, cfg = {}, lang = "vi") {
   const warnings = [];
-  const skills = collectSkills(kitDir, (w) => warnings.push(w));
-  checkSkillTargetCapabilities(kitDir, cfg, skills, (w) => warnings.push(w));
+  const skills = collectSkills(kitDir, (w) => warnings.push(w), lang);
+  checkSkillTargetCapabilities(kitDir, cfg, skills, (w) => warnings.push(w), lang);
   return warnings;
 }
 
@@ -407,11 +420,12 @@ const TRIGGER_CUES = [
 // tests/ are OUT of scope — pinning covers the skill's actual behavior, not its metadata.
 function computeSkillContentHash(kitDir, id, algorithm) {
   const dir = join(kitDir, SKILLS_DIR, id);
+  const strings = loadDoctorStrings(kitDir, "vi");
   const parts = [readFileSync(join(dir, "SKILL.md"), "utf8")];
   const files = [];
   for (const sub of SUPPORT_SUBDIRS) {
     const abs = join(dir, sub);
-    if (existsSync(abs)) for (const f of listFilesRec(abs, dir)) files.push(`${sub}/${f}`);
+    if (existsSync(abs)) for (const f of listFilesRec(abs, dir, "", undefined, strings)) files.push(`${sub}/${f}`);
   }
   files.sort();
   for (const rel of files) parts.push(`${rel.length}:${rel}\n${readFileSync(join(dir, rel), "utf8")}`);
