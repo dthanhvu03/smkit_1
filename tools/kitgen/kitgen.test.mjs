@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
-import { collectSkills, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective } from "../../engine/emitter.mjs";
+import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -876,4 +876,130 @@ test("transaction: rollback removes files that were newly created before the fai
   };
   assert.throws(() => applyPlanTransactional(plan));
   assert.ok(!existsSync(newAbs), "newly-created file must be removed on rollback");
+});
+
+// ============================================================================
+// P2.1 — .agents/skills/ discovery (verified: Codex + Gemini CLI)
+// ============================================================================
+test("agentsmd: emits a PORTABLE SKILL.md per skill to .agents/skills/, no Claude vendor extensions", () => {
+  const tmp = copyKit();
+  assert.equal(runKit(tmp, "build").status, 0);
+  for (const id of ["code-review", "guard-design", "refactor", "release-check", "security-review", "test-design"]) {
+    const md = readFileSync(join(tmp, "out", ".agents", "skills", id, "SKILL.md"), "utf8");
+    assert.match(md, new RegExp(`name: "${id}"`));
+    assert.match(md, /license: "Proprietary"/);
+    assert.match(md, /compatibility:/);
+    assert.match(md, /metadata:/);
+    assert.doesNotMatch(md, /when_to_use:/, "Claude-only field must not appear in the portable overlay");
+    assert.doesNotMatch(md, /disable-model-invocation/, "Claude-only field must not appear in the portable overlay");
+    assert.doesNotMatch(md, /^paths:/m, "Claude-only field must not appear in the portable overlay");
+  }
+});
+
+test("agentsmd: not emitted when agentsmd is not a configured target", () => {
+  const tmp = copyKit();
+  editFile(join(tmp, "kit.config.yaml"), "  - agentsmd\n", "");
+  assert.equal(runKit(tmp, "build").status, 0);
+  assert.ok(!existsSync(join(tmp, "out", ".agents")), "no .agents/ dir when agentsmd is not selected");
+});
+
+// ============================================================================
+// P2.2 — per-abstraction schemaVersion
+// ============================================================================
+test("schemaVersion: absent is fine (implicit v1); non-integer/non-positive is an ERROR; unknown future version WARNS", () => {
+  const tmp = copyKit();
+  writeSkill(tmp, "sv-bad", "---\nname: sv-bad\ndescription: Use when demoing.\n---\n\n# x\n",
+    "schemaVersion: 0\nid: sv-bad\n");
+  assert.match(validateSkillGovernance(tmp).errors.join("|"), /\[SKILL_SCHEMA_VERSION_INVALID\]/);
+
+  const tmp2 = copyKit();
+  writeSkill(tmp2, "sv-future", "---\nname: sv-future\ndescription: Use when demoing.\n---\n\n# x\n",
+    "schemaVersion: 99\nid: sv-future\n");
+  const r2 = validateSkillGovernance(tmp2);
+  assert.deepEqual(r2.errors, []);
+  assert.match(r2.warnings.join("|"), /\[SKILL_SCHEMA_VERSION_UNKNOWN\]/);
+
+  const tmp3 = copyKit();
+  const md = readFileSync(join(tmp3, "engine", "roles", "planner.md"), "utf8");
+  writeRole(tmp3, "planner.md", md.replace("model: sonnet\n", "model: sonnet\nschemaVersion: -1\n"));
+  assert.match(validateRoleGovernance(tmp3).errors.join("|"), /\[ROLE_SCHEMA_VERSION_INVALID\]/);
+
+  const tmp4 = copyKit();
+  const rmd = readFileSync(join(tmp4, "engine", "rules", "00-hard-rules.md"), "utf8");
+  writeFileSync(join(tmp4, "engine", "rules", "00-hard-rules.md"), rmd.replace("scope: always", "schemaVersion: 2.5\nscope: always"));
+  const cfg4 = parseYaml(readFileSync(join(tmp4, "kit.config.yaml"), "utf8"));
+  assert.match(validateRuleGovernance(tmp4, cfg4).errors.join("|"), /\[RULE_SCHEMA_VERSION_INVALID\]/);
+});
+
+// ============================================================================
+// P2.3 — token budget estimate (progressive disclosure)
+// ============================================================================
+test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as an estimate", () => {
+  const cfg = parseYaml(readFileSync(join(KIT_ROOT, "kit.config.yaml"), "utf8"));
+  const b = estimateTokenBudget(KIT_ROOT, cfg);
+  assert.match(b.estimateMethod, /heuristic/i);
+  assert.ok(b.alwaysLoaded.total > 0);
+  assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
+  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 7, "one catalog item per shipped role");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 6, "one catalog item per shipped skill");
+  // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
+  // (full instructions vs name+description only) — proves the tiers are real, not equal.
+  assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);
+});
+
+test("doctor --tokens prints an estimate without affecting exit code or errors", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  const withTokens = runKit(tmp, "doctor", "--tokens");
+  const without = runKit(tmp, "doctor");
+  assert.equal(withTokens.status, without.status);
+  assert.match(withTokens.stdout, /Token budget/);
+  assert.match(withTokens.stdout, /heuristic/i);
+});
+
+test("doctor --json --tokens includes a tokenBudget key", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  const r = runKit(tmp, "doctor", "--json", "--tokens");
+  const j = JSON.parse(r.stdout);
+  assert.ok(j.tokenBudget, "tokenBudget must be present in JSON output when --tokens is passed");
+  assert.ok(j.tokenBudget.alwaysLoaded.total >= 0);
+});
+
+// ============================================================================
+// P2.4 — profile rule override:true
+// ============================================================================
+test("rule override: a profile rule with override:true replaces the engine rule of the same id", () => {
+  const tmp = copyKit();
+  writeFileSync(join(tmp, "profiles", "generic", "rules", "hard-rules-override.md"),
+    "---\nid: hard-rules\noverride: true\nscope: always\nenforce: agent-read\ntitle: Overridden\n---\n\n# Overridden by profile\n");
+  const profYaml = readFileSync(join(tmp, "profiles", "generic", "profile.yaml"), "utf8");
+  writeFileSync(join(tmp, "profiles", "generic", "profile.yaml"),
+    profYaml.replace("rules:\n  - rules/conventions.md", "rules:\n  - rules/conventions.md\n  - rules/hard-rules-override.md"));
+
+  const cfg = parseYaml(readFileSync(join(tmp, "kit.config.yaml"), "utf8"));
+  const rules = collectRules(tmp, cfg);
+  const hardRules = rules.filter((r) => r.id === "hard-rules");
+  assert.equal(hardRules.length, 1, "override replaces in place — no duplicate");
+  assert.equal(hardRules[0].title, "Overridden");
+  assert.deepEqual(validateRuleGovernance(tmp, cfg).errors, [], "an intentional override must not be flagged as a conflict");
+
+  assert.equal(runKit(tmp, "build").status, 0);
+  const out = readFileSync(join(tmp, "out", ".claude", "rules", "hard-rules.md"), "utf8");
+  assert.match(out, /Overridden by profile/);
+});
+
+test("rule override: a same-id profile rule WITHOUT override:true is a genuine conflict", () => {
+  const tmp = copyKit();
+  writeFileSync(join(tmp, "profiles", "generic", "rules", "hard-rules-dup.md"),
+    "---\nid: hard-rules\nscope: always\nenforce: agent-read\ntitle: Accidental duplicate\n---\n\n# Duplicate\n");
+  const profYaml = readFileSync(join(tmp, "profiles", "generic", "profile.yaml"), "utf8");
+  writeFileSync(join(tmp, "profiles", "generic", "profile.yaml"),
+    profYaml.replace("rules:\n  - rules/conventions.md", "rules:\n  - rules/conventions.md\n  - rules/hard-rules-dup.md"));
+
+  const cfg = parseYaml(readFileSync(join(tmp, "kit.config.yaml"), "utf8"));
+  assert.match(validateRuleGovernance(tmp, cfg).errors.join("|"), /\[RULE_ID_CONFLICT\]/);
+  const built = runKit(tmp, "build");
+  assert.equal(built.status, 1);
+  assert.ok(!existsSync(join(tmp, "out")), "no output for an unintentional rule id collision");
 });

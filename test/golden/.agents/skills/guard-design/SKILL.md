@@ -4,6 +4,10 @@ name: "guard-design"
 description: "Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it."
 license: "Proprietary"
 compatibility: "Requires repository read access and git."
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: "platform-team"
 ---
 
 # Guard Design skill

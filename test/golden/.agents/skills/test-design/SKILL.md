@@ -4,6 +4,10 @@ name: "test-design"
 description: "Use when a task needs a QA or test gate. Invoke to design test cases and edge cases and to produce the exact commands that prove the behavior works."
 license: "Proprietary"
 compatibility: "Requires repository read access and git."
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: "platform-team"
 ---
 
 # Test Design skill

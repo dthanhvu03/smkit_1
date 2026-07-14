@@ -588,12 +588,35 @@ doctor checks in §16; (f) extend the ownership manifest to skill supporting fil
 
 ## 20. P0 / P1 / P2 roadmap
 
-- **P0 (correctness/portability):** align Skill frontmatter to the open standard; remove
-  `paths` from skills; add `enforcement.type` vocabulary to rules; emitter drop-warnings.
-- **P1 (capability/security):** skill `scripts/references/assets` + manifest tracking;
-  trust tiers + provenance/hash; doctor §16 checks; rule precedence/conflict fail.
-- **P2 (ergonomics):** `.agents/skills/` discovery; per-abstraction `schemaVersion`
-  migration tooling; token measurement for progressive disclosure; profile override UX.
+- **P0 (correctness/portability) — DONE:** align Skill frontmatter to the open standard;
+  remove `paths` from skills; add `enforcement.type` vocabulary to rules; emitter
+  drop-warnings.
+- **P1 (capability/security) — DONE:** skill `scripts/references/assets` + manifest
+  tracking; trust tiers + provenance/hash; doctor §16 checks; rule precedence/conflict
+  fail; Role capability/permission contract (verified subagent field emission); Rule
+  activation/enforcement.type contract.
+- **P2 (ergonomics) — DONE:**
+  - **`.agents/skills/` discovery** — verified (Codex: `learn.chatgpt.com/docs/
+    build-skills`, scans `$CWD/.agents/skills`, `$CWD/../.agents/skills`,
+    `$REPO_ROOT/.agents/skills`, `$HOME/.agents/skills`, `/etc/codex/skills`, same-name
+    skills across tiers are NOT merged — both stay selectable; Gemini CLI: `geminicli.com/
+    docs/cli/skills/`, reads `.agents/skills/` and prioritizes it over its own native
+    `.gemini/skills/`). **Implemented:** the `agentsmd` target now also emits a strictly
+    portable `SKILL.md` (name/description/license/compatibility/metadata/allowed-tools
+    only — no Claude extensions) to `.agents/skills/<id>/` for every skill.
+  - **Per-abstraction `schemaVersion`** — implemented for Skill (`skill.kit.yaml`), Role,
+    and Rule: absent is fine (implicit v1); non-integer/non-positive is an ERROR; a
+    valid-but-unrecognized future version is a forward-compatibility WARNING, never
+    build-blocking.
+  - **Token measurement for progressive disclosure** — implemented as `estimateTokenBudget()`
+    + `doctor --tokens` (also folds into `--json`). A **documented estimate** (chars/4,
+    explicitly labeled "NOT an exact tokenizer"), itemizing always-loaded (always-on rule
+    bodies, role catalog, skill catalog) vs on-demand (path/glob rule bodies, role
+    prompts, skill bodies) — this is what finally lets the kit say something concrete
+    about context cost instead of just asserting savings.
+  - **Profile override UX** — Rules gained the same `override: true` mechanism invariants
+    already had: a profile rule sharing an engine rule's `id` without `override: true` is
+    a conflict (fails build); with it, the profile rule replaces the engine one in place.
 
 ## 21. Open questions
 
@@ -620,8 +643,8 @@ doctor checks in §16; (f) extend the ownership manifest to skill supporting fil
 | agentskills.io/specification (metadata = string→string; scripts/references/assets; allowed-tools experimental) | open spec | 2026-07-11 | verified |
 | cursor.com/docs/context/skills | vendor doc | 2026-07-11 | existence verified, not read (partial) |
 | docs.github.com/en/copilot/concepts/agents/about-agent-skills | vendor doc | 2026-07-11 | existence verified (partial) |
-| developers.openai.com/codex/skills/ | vendor doc | 2026-07-11 | existence verified (partial) |
-| geminicli.com/docs/cli/skills/ | vendor doc | 2026-07-11 | existence verified (partial) |
+| developers.openai.com/codex/skills/ → redirects to learn.chatgpt.com/docs/build-skills (`.agents/skills/` discovery tiers, no-merge-on-name-clash) | vendor doc | 2026-07-11 | verified |
+| geminicli.com/docs/cli/skills/ (`.agents/skills/` alias precedence over native `.gemini/skills/`) | vendor doc | 2026-07-11 | verified |
 | Cursor rules / Windsurf rules / Copilot instructions / GEMINI.md | vendor docs | — | training Jan 2026, not re-fetched (partial) |
 
 ## 23. Academic / research source list
@@ -648,14 +671,20 @@ path-scoping; Claude command↔skill compatibility + manual-only; Copilot Agent 
 `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`,
 `hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`) —
 per-subagent worktree isolation, maxTurns and per-role memory are all **verified**, no
-longer open. Still open:
+longer open. Also resolved: **`.agents/skills/` discovery + precedence** — Codex
+(`learn.chatgpt.com/docs/build-skills`) scans five tiers (cwd, parent, repo root, home,
+`/etc/codex/skills`) and does NOT merge same-name skills across locations (both stay
+selectable, not a strict override); Gemini CLI (`geminicli.com/docs/cli/skills/`) reads
+`.agents/skills/` at user+workspace tiers and the `.agents/` alias wins over its own
+native `.gemini/skills/` when both exist at the same tier. Neither reads `.claude/
+skills/`. Implemented: the kit's `agentsmd` target now emits a portable `SKILL.md` to
+`.agents/skills/<id>/` for exactly this reason. Still open:
 
 - Exact current Cursor `.mdc` rule field set and Cursor skill folder/precedence/extensions
   (**PARTIAL** — official doc exists, details not fully readable).
 - Gemini `GEMINI.md`/custom-agent + skill-consent specifics.
 - Codex/Copilot/Cursor/Windsurf/Gemini subagent-equivalent frontmatter (none confirmed to
   accept anything resembling Claude's field set).
-- `.agents/skills/` precedence when a repo also has `.claude/skills`/vendor paths.
 - Subagent-calls-subagent nesting on Claude.
 - `mcpServers`/`hooks`/`color`/`initialPrompt` are verified Claude subagent fields not yet
   modeled in the kit's canonical Role schema (a scope gap, not a verification gap).

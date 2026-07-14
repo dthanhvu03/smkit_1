@@ -13,9 +13,18 @@
   with governance validation for self-contradictory permissions, invalid enum values, and
   broken/unpreloadable skill references. Rules: `activation`/`enforcement.type` fields,
   additive over legacy `scope`/`enforce`, with governance validation for invalid
-  activation modes, unbacked enforcement claims, and duplicate rule ids across layers.
-  See `engine/emitter.mjs` (`roleEffective`, `ruleEffective`, `validateRoleGovernance`,
-  `validateRuleGovernance`) and 86 passing tests.
+  activation modes, unbacked enforcement claims, and duplicate rule ids across layers —
+  now including an explicit `override: true` escape hatch for an intentional profile
+  override (mirroring the invariant mechanism), so only unintentional collisions fail.
+  **P2 ergonomics also implemented:** verified cross-tool `.agents/skills/` discovery
+  (Codex + Gemini CLI both read it; neither reads `.claude/skills/`) — the `agentsmd`
+  target now emits a strictly portable `SKILL.md` there for every skill; per-abstraction
+  `schemaVersion` (Skill/Role/Rule — absent is fine, invalid is an error, unrecognized
+  future version is a warning); and `doctor --tokens` / `estimateTokenBudget()`, a
+  documented chars/4 ESTIMATE (never claimed as exact) of always-loaded vs on-demand
+  context footprint. See `engine/emitter.mjs` (`roleEffective`, `ruleEffective`,
+  `validateRoleGovernance`, `validateRuleGovernance`, `estimateTokenBudget`) and 94
+  passing tests.
 - **Context:** Research in
   [`docs/research/2026-07-11-roles-rules-skills-architecture.md`](../research/2026-07-11-roles-rules-skills-architecture.md)
   verified the current abstractions against live standards (agents.md, agentskills.io,

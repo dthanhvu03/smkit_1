@@ -29,6 +29,11 @@ export function loadStrings(kitDir, lang) {
   return parseYaml(readFileSync(existsSync(f) ? f : fb, "utf8"));
 }
 
+// Profile rules may override an engine rule with the same id by declaring
+// `override: true` (mirrors the invariant override mechanism) — replaces the engine
+// rule in place rather than leaving both, so it does not also trip the id-conflict
+// check in validateRuleGovernance. A same-id profile rule WITHOUT `override: true` is
+// left as a genuine duplicate for that check to catch (no silent shadowing).
 export function collectRules(kitDir, cfg) {
   const rules = [];
   for (const f of listMdAt(kitDir, "engine/rules")) {
@@ -41,7 +46,10 @@ export function collectRules(kitDir, cfg) {
     const prof = parseYaml(readFileSync(profFile, "utf8"));
     for (const r of prof.rules || []) {
       const { fm, body } = parseFrontmatter(readAt(kitDir, join(profDir, r)));
-      rules.push({ ...fm, body: body.trim() });
+      const rule = { ...fm, body: body.trim() };
+      const existingIdx = rule.id ? rules.findIndex((x) => x.id === rule.id) : -1;
+      if (existingIdx !== -1 && rule.override === true) rules.splice(existingIdx, 1, rule);
+      else rules.push(rule);
     }
   }
   return rules;
@@ -94,12 +102,14 @@ export function validateRuleGovernance(kitDir, cfg) {
   const errors = [];
   const warnings = [];
   const err = (code, msg) => errors.push(`[${code}] ${msg}`);
+  const wrn = (code, msg) => warnings.push(`[${code}] ${msg}`);
   const seen = new Set();
 
   for (const r of collectRules(kitDir, cfg || {})) {
     if (!r.id) { err("RULE_ID_MISSING", `rule thiếu id (title="${r.title || "?"}")`); continue; }
-    if (seen.has(r.id)) err("RULE_ID_CONFLICT", `rule id "${r.id}" trùng lặp giữa engine/profile -> đổi tên id`);
+    if (seen.has(r.id)) err("RULE_ID_CONFLICT", `rule id "${r.id}" trùng lặp giữa engine/profile -> đổi tên id (hoặc thêm 'override: true' nếu profile cố ý ghi đè)`);
     seen.add(r.id);
+    checkSchemaVersion("RULE", r.schemaVersion, `rule "${r.id}"`, err, wrn);
 
     const { activation, enforcement } = ruleEffective(r);
     if (!RULE_ACTIVATION_MODES.includes(activation.mode))
@@ -347,6 +357,20 @@ function computeSkillContentHash(kitDir, id, algorithm) {
   return createHash(algorithm).update(parts.join(""), "utf8").digest("hex");
 }
 
+// Per-abstraction schema versioning (P2 ergonomics): absent = implicit v1, no complaint.
+// A non-integer/non-positive value is malformed (ERROR); a valid-but-unrecognized
+// future version is a forward-compatibility WARNING, not a build blocker.
+const SUPPORTED_SCHEMA_VERSIONS = { SKILL: [1], ROLE: [1], RULE: [1] };
+function checkSchemaVersion(kind, value, tag, err, wrn) {
+  if (value === undefined) return;
+  if (!Number.isInteger(value) || value < 1) {
+    err(`${kind}_SCHEMA_VERSION_INVALID`, `${tag}: schemaVersion "${value}" không hợp lệ -> phải là số nguyên dương`);
+    return;
+  }
+  if (!SUPPORTED_SCHEMA_VERSIONS[kind].includes(value))
+    wrn(`${kind}_SCHEMA_VERSION_UNKNOWN`, `${tag}: schemaVersion ${value} chưa được kit hỗ trợ (hỗ trợ: ${SUPPORTED_SCHEMA_VERSIONS[kind].join(", ")}) -> kiểm tra tương thích trước khi dùng`);
+}
+
 // Governance rules a skill must not violate — checked BEFORE generation (build fails,
 // nothing is written) so a skill can never self-escalate beyond its declared trust
 // tier, misrepresent its pinned content, or request a self-contradictory permission.
@@ -362,6 +386,7 @@ export function validateSkillGovernance(kitDir) {
     const gov = s.gov || {};
     const tier = gov.trustTier;
     const tag = `skill "${s.id}"`;
+    checkSchemaVersion("SKILL", gov.schemaVersion, tag, err, wrn);
 
     // Agent Skills spec: name (forced = directory) must be lowercase alnum+hyphen, ≤64.
     if (!NAME_RE.test(s.id) || s.id.length > 64)
@@ -438,6 +463,7 @@ export function validateRoleGovernance(kitDir) {
     const name = fm.name || "?";
     const tag = `role "${name}"`;
     const eff = roleEffective(fm);
+    checkSchemaVersion("ROLE", fm.schemaVersion, tag, err, wrn);
 
     const allowSet = new Set(eff.allowTools);
     for (const t of eff.denyTools)
@@ -606,6 +632,8 @@ function emitClaudeSkill(skill, S) {
   const fm = [`# ${S.generated_banner}`, `name: ${y(skill.name)}`];
   if (skill.description) fm.push(`description: ${y(skill.description)}`);
   if (skill.when_to_use) fm.push(`when_to_use: ${y(skill.when_to_use)}`);
+  if (skill.license) fm.push(`license: ${y(skill.license)}`);
+  if (skill.compatibility) fm.push(`compatibility: ${y(skill.compatibility)}`);
   // allowed-tools ONLY from pre-approved tools — never auto-promote requestedTools.
   const preApproved = skill.gov?.permissions?.preApprovedTools || [];
   if (preApproved.length) fm.push(`allowed-tools: ${preApproved.join(", ")}`);
@@ -619,6 +647,28 @@ function emitClaudeSkill(skill, S) {
     fm.push("paths:");
     for (const g of claudePaths) fm.push(`  - "${g}"`);
   }
+  return `---\n${fm.join("\n")}\n---\n\n${skill.body}\n`;
+}
+
+// Strictly PORTABLE Agent Skills open-standard frontmatter, for the cross-tool
+// `.agents/skills/` discovery path (verified 2026-07-11: Codex reads $CWD/.agents/skills,
+// $REPO_ROOT/.agents/skills, etc.; Gemini CLI reads .agents/skills/ and even prioritizes
+// it over its own native .gemini/skills/ — neither reads .claude/skills). Only fields
+// defined by the open spec are emitted: name, description, license, compatibility,
+// metadata, allowed-tools. Claude-only extensions (when_to_use, disable-model-invocation,
+// user-invocable, paths) are deliberately excluded — those tools have no verified
+// support for them and emitting them here would misrepresent the contract.
+function emitPortableSkill(skill, S) {
+  const fm = [`# ${S.generated_banner}`, `name: ${y(skill.name)}`];
+  if (skill.description) fm.push(`description: ${y(skill.description)}`);
+  if (skill.license) fm.push(`license: ${y(skill.license)}`);
+  if (skill.compatibility) fm.push(`compatibility: ${y(skill.compatibility)}`);
+  if (Object.keys(skill.metadata || {}).length) {
+    fm.push("metadata:");
+    for (const [k, v] of Object.entries(skill.metadata)) fm.push(`  ${k}: ${y(v)}`);
+  }
+  const preApproved = skill.gov?.permissions?.preApprovedTools || [];
+  if (preApproved.length) fm.push(`allowed-tools: ${preApproved.join(" ")}`); // spec: space-separated
   return `---\n${fm.join("\n")}\n---\n\n${skill.body}\n`;
 }
 
@@ -693,7 +743,14 @@ class Emitter {
 class AgentsMdEmitter extends Emitter {
   emit() {
     const { cfg, S, alwaysRules, roles, skills, commands } = this.ctx;
-    return [["AGENTS.md", emitAgentsMd(cfg, S, alwaysRules, roles, skills, commands)]];
+    const out = [["AGENTS.md", emitAgentsMd(cfg, S, alwaysRules, roles, skills, commands)]];
+    // Cross-tool skill discovery (verified: Codex + Gemini CLI both read .agents/skills/;
+    // neither reads .claude/skills/). Portable frontmatter only — no Claude extensions.
+    for (const s of skills) {
+      out.push([`.agents/skills/${s.id}/SKILL.md`, emitPortableSkill(s, S)]);
+      for (const sup of s.supporting) out.push([`.agents/skills/${s.id}/${sup.rel}`, readFileSync(sup.abs, "utf8")]);
+    }
+    return out;
   }
 }
 
@@ -756,6 +813,56 @@ export const EMITTERS = {
   copilot: CopilotEmitter,
   windsurf: WindsurfEmitter,
 };
+
+// ---- Progressive-disclosure token budget (P2 ergonomics) -------------------
+// A documented ESTIMATE only (chars/4, a common rough heuristic for English text) —
+// NOT an exact tokenizer. Never present this as a precise count; it exists so the kit
+// can flag an always-loaded footprint growing unboundedly, and to stop "this saves
+// tokens" claims from being made without any measurement at all.
+const TOKEN_CHARS_PER_TOKEN = 4;
+const estTokens = (str) => Math.ceil((str || "").length / TOKEN_CHARS_PER_TOKEN);
+export const ALWAYS_ON_RULE_BODY_LINE_TARGET = 200; // matches the kit's own design target
+
+// Returns a structured, itemized estimate of what's always loaded into context (rule
+// bodies with activation.mode==="always", the role delegation catalog, the skill
+// discovery catalog) vs what's loaded on demand (path/glob-scoped rule bodies, full
+// role prompts, full skill bodies + supporting files). Pure/read-only.
+export function estimateTokenBudget(kitDir, cfg) {
+  cfg = cfg || {};
+  const rules = collectRules(kitDir, cfg);
+  const roles = collectRoles(kitDir);
+  const skills = collectSkills(kitDir);
+
+  const item = (id, text) => ({ id, chars: (text || "").length, tokens: estTokens(text) });
+  const sum = (items) => items.reduce((a, x) => a + x.tokens, 0);
+
+  const alwaysRuleItems = rules.filter((r) => ruleEffective(r).activation.mode === "always").map((r) => item(r.id, r.body));
+  const onDemandRuleItems = rules.filter((r) => ruleEffective(r).activation.mode !== "always").map((r) => item(r.id, r.body));
+  const roleCatalogItems = roles.map((r) => item(r.fm?.name, `${r.fm?.name || ""} ${r.fm?.description || ""}`));
+  const rolePromptItems = roles.map((r) => item(r.fm?.name, r.body));
+  const skillCatalogItems = skills.map((s) => item(s.id, `${s.name} ${s.description} ${s.when_to_use || ""}`));
+  const skillBodyItems = skills.map((s) => item(s.id, s.body));
+
+  const alwaysLoadedTokens = sum(alwaysRuleItems) + sum(roleCatalogItems) + sum(skillCatalogItems);
+  const alwaysRuleLines = rules
+    .filter((r) => ruleEffective(r).activation.mode === "always")
+    .reduce((a, r) => a + r.body.split("\n").length, 0);
+
+  return {
+    estimateMethod: `chars/${TOKEN_CHARS_PER_TOKEN} (rough heuristic, NOT an exact tokenizer)`,
+    alwaysLoaded: {
+      rules: { items: alwaysRuleItems, tokens: sum(alwaysRuleItems), lines: alwaysRuleLines, lineTarget: ALWAYS_ON_RULE_BODY_LINE_TARGET, overTarget: alwaysRuleLines > ALWAYS_ON_RULE_BODY_LINE_TARGET },
+      roleCatalog: { items: roleCatalogItems, tokens: sum(roleCatalogItems) },
+      skillCatalog: { items: skillCatalogItems, tokens: sum(skillCatalogItems) },
+      total: alwaysLoadedTokens,
+    },
+    onDemand: {
+      pathScopedRules: { items: onDemandRuleItems, tokens: sum(onDemandRuleItems) },
+      rolePrompts: { items: rolePromptItems, tokens: sum(rolePromptItems) },
+      skillBodies: { items: skillBodyItems, tokens: sum(skillBodyItems) },
+    },
+  };
+}
 
 // Build the full output map for a config. Pure: returns Map<relPath, content>.
 export function buildOutputs(cfg, { kitDir = DEFAULT_KIT_DIR } = {}) {

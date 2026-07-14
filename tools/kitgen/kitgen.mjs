@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
 import { applyBuild, classifyDrift } from "./apply.mjs";
-import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings } from "../../engine/emitter.mjs";
+import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings, estimateTokenBudget } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
 // so it works whether the kit is the project root or an installed dep.
@@ -157,6 +157,11 @@ function runDoctor() {
   const errCount = R.filter((r) => r.level === "error").length;
   const warnCount = R.filter((r) => r.level === "warn").length;
 
+  // ---- progressive-disclosure token budget (P2, opt-in via --tokens) ----
+  // A documented ESTIMATE (chars/4), never presented as an exact count.
+  const showTokens = process.argv.includes("--tokens");
+  const tokenBudget = showTokens && cfg ? estimateTokenBudget(KIT_DIR, cfg) : null;
+
   // ---- machine-readable output (F-11) ----
   if (process.argv.includes("--json")) {
     const sevOf = { ok: "info", warn: "warning", error: "error" };
@@ -169,6 +174,7 @@ function runDoctor() {
       project: cfg?.project?.name ?? null,
       summary: { errors: errCount, warnings: warnCount },
       results,
+      ...(tokenBudget ? { tokenBudget } : {}),
     }, null, 2) + "\n");
     return errCount > 0 ? 1 : 0;
   }
@@ -185,6 +191,21 @@ function runDoctor() {
   const errs = R.filter((r) => r.level === "error").length;
   const warns = R.filter((r) => r.level === "warn").length;
   console.log(`\nSummary: ${errs} error(s), ${warns} warning(s).`);
+
+  if (tokenBudget) {
+    const { alwaysLoaded, onDemand, estimateMethod } = tokenBudget;
+    console.log(`\nToken budget (${estimateMethod}):`);
+    console.log(`  Always-loaded: ~${alwaysLoaded.total} tokens`);
+    console.log(`    rules (activation=always): ~${alwaysLoaded.rules.tokens} tokens, ${alwaysLoaded.rules.lines} lines` +
+      (alwaysLoaded.rules.overTarget ? ` [OVER target of ${alwaysLoaded.rules.lineTarget} lines]` : ""));
+    console.log(`    role catalog (name+description): ~${alwaysLoaded.roleCatalog.tokens} tokens`);
+    console.log(`    skill catalog (name+description): ~${alwaysLoaded.skillCatalog.tokens} tokens`);
+    console.log(`  On-demand (loaded only when triggered):`);
+    console.log(`    path/glob-scoped rule bodies: ~${onDemand.pathScopedRules.tokens} tokens`);
+    console.log(`    role prompts (per subagent invocation): ~${onDemand.rolePrompts.tokens} tokens`);
+    console.log(`    skill bodies (per activation): ~${onDemand.skillBodies.tokens} tokens`);
+  }
+
   return errs > 0 ? 1 : 0;
 }
 
