@@ -1,12 +1,21 @@
 # ADR-004 — Roles, Rules, Skills & Commands are four distinct abstractions
 
-- **Status:** Accepted (2026-07-11). **Skill layer implemented and hardened** (two-layer
-  `SKILL.md` + `skill.kit.yaml`, standard-compliant emitter, backward-compat migration,
-  drop-warnings, spec-accurate description limits, multilingual trigger heuristic,
-  cryptographically-verified content pinning for high-risk trust tiers, per-target
-  capability warnings for invocation control and Claude's `paths` overlay — see
-  `engine/emitter.mjs`, the 6 migrated `engine/skills/*`, and 73 passing tests). Role and
-  Rule schema changes remain design-only / deferred.
+- **Status:** Accepted (2026-07-11). **Skill, Role and Rule layers all implemented.**
+  Skills: two-layer `SKILL.md` + `skill.kit.yaml`, standard-compliant emitter,
+  backward-compat migration, drop-warnings, spec-accurate description limits,
+  multilingual trigger heuristic, cryptographically-verified content pinning for
+  high-risk trust tiers, per-target capability warnings for invocation control and
+  Claude's `paths` overlay. Roles: nested `permissions/runtime/skills/memory/output`
+  canonical fields, additive over the legacy flat `tools:`/`model:` format, translated by
+  the Claude emitter into the full **verified** subagent frontmatter (`tools`,
+  `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `isolation`,
+  `background`, `effort`, `memory` — code.claude.com/docs/en/sub-agents, 2026-07-11),
+  with governance validation for self-contradictory permissions, invalid enum values, and
+  broken/unpreloadable skill references. Rules: `activation`/`enforcement.type` fields,
+  additive over legacy `scope`/`enforce`, with governance validation for invalid
+  activation modes, unbacked enforcement claims, and duplicate rule ids across layers.
+  See `engine/emitter.mjs` (`roleEffective`, `ruleEffective`, `validateRoleGovernance`,
+  `validateRuleGovernance`) and 86 passing tests.
 - **Context:** Research in
   [`docs/research/2026-07-11-roles-rules-skills-architecture.md`](../research/2026-07-11-roles-rules-skills-architecture.md)
   verified the current abstractions against live standards (agents.md, agentskills.io,
@@ -54,6 +63,16 @@
    {guidance, static-check, hook, ci, permission, sandbox, unsupported}`. A Rule expressed
    in Markdown is `guidance` by default and **must not claim to be hard-enforced**; when
    it is `hook`/`ci`/`permission`, doctor verifies a real backing exists.
+   **Implemented:** `activation{mode,paths}` and `enforcement{type,severity}` are additive
+   canonical fields, auto-derived from the kit's original `scope`/`paths`/`enforce`
+   frontmatter when not explicitly set (no external spec to converge to here, unlike
+   Skills — this is the kit's own schema evolving, not a migration). `enforcement.type`
+   must be one of the seven values; `hook` requires a real mapped hook file
+   (`RULE_HOOK_MAP` + file existence), `static-check` requires at least one skill with an
+   output-format section — both checked by `validateRuleGovernance` **before generation**
+   (build fails, nothing written), not only by `doctor` after the fact. No two rules
+   across `engine/` and a `profile/` may share an `id` — there is no project-layer
+   override for rules (unlike invariants), so any collision is always a conflict.
 4. **Roles must declare their capability & permission boundary** (`permissions.allow/deny`,
    `runtime.model/isolation`, `skills.preload`). These are *declared intent*; they are a
    real restriction only on targets that support it (Claude subagents).
@@ -65,6 +84,23 @@
    Therefore the canonical permission model splits `requestedTools` / `deniedTools` /
    `preApprovedTools`, and an adapter never auto-promotes `requestedTools` to
    `allowed-tools`, and never pre-approves a dangerous tool just because a skill asks.
+   **Implemented:** the canonical Role shape (`permissions{allowTools,denyTools,mode}`,
+   `runtime{model,effort,maxTurns,isolation,background}`, `skills{preload}`,
+   `memory{scope}`, `output{requiredSections}`) is additive over the legacy flat
+   `tools:`/`model:` fields — both coexist, nested wins when both are set for the same
+   concept. Unlike Skills, **every one of these fields maps to a real, verified Claude
+   subagent frontmatter key** (code.claude.com/docs/en/sub-agents, 2026-07-11: `tools`,
+   `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `isolation`,
+   `background`, `effort`, `memory`) — none were invented. `permissions.mode` maps to the
+   real `permissionMode` enum (`default|acceptEdits|auto|dontAsk|bypassPermissions|plan|
+   manual`); `runtime.isolation` to the real `isolation: worktree`; `skills.preload` to the
+   real `skills:` field (full skill content injected at subagent startup — **cannot**
+   target a skill with `disable-model-invocation: true`, which `validateRoleGovernance`
+   now rejects as `ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT` instead of letting it silently
+   fail at runtime as Claude itself does, logging only to the debug log). `output.
+   requiredSections` is kit-owned only (never emitted) — doctor/build warn if a role's
+   body is missing a section it declares as required. A role's `allowTools`/`denyTools`
+   must never overlap (`ROLE_PERMISSION_CONTRADICTION`).
 5. **Command is a manual entrypoint.** On Claude Code (where custom commands have merged
    into skills) a Command emits as a skill with `disable-model-invocation: true`; on other
    targets it maps to the native command/workflow. Source stays separate from Skill.

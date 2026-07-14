@@ -6,7 +6,7 @@
 // error BEFORE creating, deleting, or writing anything.
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
-import { collectInvariants, validateSkillGovernance } from "../../engine/emitter.mjs";
+import { collectInvariants, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance } from "../../engine/emitter.mjs";
 
 export const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 export const MODES = ["vibe", "standard", "strict"];
@@ -82,6 +82,24 @@ export function validateConfig(cfg, { kitDir, projectDir } = {}) {
     const sg = validateSkillGovernance(kitDir);
     errors.push(...sg.errors);
     warnings.push(...sg.warnings);
+  }
+
+  // Role governance: a role can never declare a self-contradictory permission
+  // boundary, an invalid enum value, or preload a skill that doesn't exist / can't be
+  // preloaded (a disable-model-invocation skill).
+  if (kitDir) {
+    const rg = validateRoleGovernance(kitDir);
+    errors.push(...rg.errors);
+    warnings.push(...rg.warnings);
+  }
+
+  // Rule governance: a rule can never claim an enforcement type the kit cannot back
+  // (hook with no hook file, static-check with no gate skill), and no two rules across
+  // engine+profile may share an id.
+  if (kitDir) {
+    const ruleG = validateRuleGovernance(kitDir, cfg);
+    errors.push(...ruleG.errors);
+    warnings.push(...ruleG.warnings);
   }
 
   // Filesystem boundary: refuse to generate outside the project (write + the

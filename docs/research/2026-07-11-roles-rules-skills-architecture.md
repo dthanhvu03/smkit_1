@@ -82,25 +82,57 @@ architect/reviewer=opus, implementer/planner/qa=sonnet, devops=haiku, orchestrat
   Treat Role as **Claude-first, degrade to an AGENTS.md index elsewhere** (current kit
   behavior is actually reasonable).
 
-**Answers to §4.A (verified where marked):**
-1. Own context — **Claude: yes** (verified). Others: mostly shared / CHƯA XÁC MINH.
-2. Own model — **Claude: yes** (`model:`), incl. `inherit`. Others: partial.
-3. Limit tools — **Claude: yes** (verified). 4. Allowlist = restriction? — **Claude
-   subagent tools = real restriction** (independent permissions); top-level `allowed-tools`
-   elsewhere is pre-approval. Kit currently emits `tools:` → maps to Claude restriction; on
-   other targets it is dropped.
-5. Permission mode — Claude subagents have independent permissions; kit does **not** model
-   a per-role permission mode yet. 6. Memory — CHƯA XÁC MINH per-role; kit none.
-7. Isolation (worktree/container) — **Claude background/worktree exists at session level**;
-   per-subagent worktree isolation CHƯA XÁC MINH; kit none. 8. Preload skills — **Claude:
-   yes** (verified, subagents can preload skills). Kit does not declare this.
-9. Self-select vs called — **both** (auto-delegate by description OR explicit). 10. Nested
-   subagents — partial. 11. Max turns — CHƯA XÁC MINH (kit none). 12. Output contract —
-   kit encodes it as prose in the body, not a machine field. 13. Lifecycle hooks — session
-   hooks yes; per-role CHƯA XÁC MINH. 14. Portable across vendors — **No** (Role is the
-   least portable abstraction). 15. Dropped on emit — everything except name/description/
-   tools/model is dropped today; on non-Claude targets the whole subagent concept is
-   dropped to an AGENTS.md bullet.
+**Answers to §4.A** — updated after fetching the full subagent frontmatter table
+(*code.claude.com/docs/en/sub-agents, verified 2026-07-11*: `name`, `description`,
+`tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`,
+`mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`,
+`initialPrompt` — only `name`/`description` required). Most items below moved from
+CHƯA XÁC MINH to **verified**; the kit now implements the ones matching ADR-004's Role
+contract (§12 canonical schema, `engine/emitter.mjs`'s `roleEffective`/
+`validateRoleGovernance`):
+1. Own context — **Claude: yes** (verified, own context window). Others: shared / CHƯA
+   XÁC MINH.
+2. Own model — **Claude: yes** (`model:`, incl. `inherit`, resolution order documented).
+   **Implemented** (legacy flat `model:` or `runtime.model`).
+3. Limit tools — **Claude: yes** (`tools:`, verified). **Implemented**
+   (`permissions.allowTools`). 4. Allowlist = restriction? — **yes, real**: omitted
+   inherits all tools; a subagent's own `tools`/`disallowedTools` are a genuine access
+   boundary for that subagent (distinct from a Skill's `allowed-tools` pre-approval).
+   **Implemented**: `disallowedTools` from `permissions.denyTools` (**verified field,
+   newly implemented** — was previously dropped).
+5. Permission mode — **verified**: `permissionMode` (`default|acceptEdits|auto|dontAsk|
+   bypassPermissions|plan|manual`). **Implemented** (`permissions.mode`, validated against
+   the enum). 6. Memory — **verified**: `memory: user|project|local` ("persistent memory
+   scope… enables cross-session learning"). **Implemented** (`memory.scope`).
+7. Isolation — **verified**: `isolation: worktree` — a temporary git worktree, isolated
+   copy of the repo, auto-cleaned if unchanged. **Implemented** (`runtime.isolation`).
+8. Preload skills — **verified**: `skills:` field injects full skill content at startup;
+   **cannot target a `disable-model-invocation: true` skill** (Claude silently skips it,
+   logs to debug only). **Implemented** (`skills.preload`), and the kit turns Claude's
+   silent skip into a **build-time error** (`ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT`) —
+   the one place the kit is stricter than the vendor by design.
+9. Self-select vs called — **both** (auto-delegate by description OR explicit `Task`
+   call, verified).
+10. Nested subagents — a subagent can still invoke skills via the `Skill` tool, but
+    subagent-calls-subagent nesting is **CHƯA XÁC MINH**.
+11. Max turns — **verified**: `maxTurns` ("maximum number of agentic turns before the
+    subagent stops"). **Implemented** (`runtime.maxTurns`, validated as a positive
+    integer).
+12. Output contract — **no vendor field**; **kit-owned only** (`output.
+    requiredSections`), validated against the role body's own Markdown headers, never
+    emitted to any target.
+13. Lifecycle hooks — **verified**: subagent frontmatter supports a `hooks:` field
+    (scoped to that subagent's lifecycle) — not yet wired into the kit's canonical
+    schema (future work).
+14. Portable across vendors — **No** (Role remains the least portable abstraction — every
+    verified field above is Claude-specific; other targets get only the AGENTS.md index).
+15. Dropped on emit — **as of this implementation, nothing verified is dropped for
+    Claude**: all ten verified fields above (tools, disallowedTools, model,
+    permissionMode, maxTurns, skills, isolation, background, effort, memory) are now
+    emitted when declared. `mcpServers`/`hooks`/`color`/`initialPrompt` are verified but
+    not yet modeled in the canonical schema (documented gap, not a silent drop — they
+    were simply never part of the ADR-004 proposal). On non-Claude targets the whole
+    subagent concept still degrades to an AGENTS.md bullet (name + description only).
 
 ## 4. Rule analysis
 
@@ -233,16 +265,20 @@ Values: `SUPPORTED` · `PARTIAL` · `UNSUPPORTED` · `VENDOR-SPECIFIC` · `KIT-O
 ### Role capabilities
 | Capability | Claude | Codex | Copilot | Windsurf/Devin | Cursor | Gemini CLI | Kit canonical |
 |---|---|---|---|---|---|---|---|
-| Separate context | SUPPORTED | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | KIT-OWNED (emit) |
+| Separate context | SUPPORTED (verified) | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED (emit) |
 | Custom prompt | SUPPORTED | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | SUPPORTED |
-| Custom model | SUPPORTED | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | KIT-OWNED |
-| Tool allowlist (restriction) | SUPPORTED | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | KIT-OWNED (Claude only) |
-| Tool denylist | PARTIAL | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | KIT-OWNED |
-| Permission mode | SUPPORTED | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | KIT-OWNED |
-| Worktree isolation | PARTIAL | CHƯA XÁC MINH | CHƯA XÁC MINH | VENDOR-SPECIFIC | CHƯA XÁC MINH | CHƯA XÁC MINH | UNSUPPORTED |
-| Parallel/background | SUPPORTED | PARTIAL | PARTIAL | VENDOR-SPECIFIC | PARTIAL | CHƯA XÁC MINH | UNSUPPORTED |
-| Skill preload | SUPPORTED | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | KIT-OWNED (declare) |
-| Output schema | UNSUPPORTED (prose) | — | — | — | — | — | KIT-OWNED (contract) |
+| Custom model | SUPPORTED (`model`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED |
+| Tool allowlist (restriction) | SUPPORTED (`tools`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED (Claude only) |
+| Tool denylist | SUPPORTED (`disallowedTools`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Permission mode | SUPPORTED (`permissionMode`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Worktree isolation | SUPPORTED (`isolation: worktree`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | VENDOR-SPECIFIC | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Parallel/background | SUPPORTED (`background`, verified) | PARTIAL | PARTIAL | VENDOR-SPECIFIC | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED |
+| Max turns | SUPPORTED (`maxTurns`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Effort | SUPPORTED (`effort`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Persistent memory | SUPPORTED (`memory: user\|project\|local`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Skill preload | SUPPORTED (`skills`, verified; cannot target `disable-model-invocation`) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED, + build-time reject of the manual-only conflict |
+| Output schema | UNSUPPORTED (prose) | — | — | — | — | — | KIT-OWNED (contract, validated, never emitted) |
+| Lifecycle hooks | SUPPORTED (`hooks`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | not yet modeled (future work) |
 
 ### Rule capabilities
 | Capability | Claude | Codex | Copilot | Windsurf/Devin | Cursor | Gemini CLI | Kit canonical |
@@ -578,7 +614,7 @@ doctor checks in §16; (f) extend the ownership manifest to skill supporting fil
 | agentskills.io/specification | open spec | 2026-07-11 | referenced, not fully read (partial) |
 | code.claude.com/docs/en/skills | vendor doc | 2026-07-11 | verified |
 | code.claude.com/docs/en/memory (`.claude/rules/` `paths:`) | vendor doc | 2026-07-11 | verified |
-| code.claude.com/docs/en/sub-agents | vendor doc | 2026-07-11 | verified (partial read) |
+| code.claude.com/docs/en/sub-agents (full frontmatter table: name/description/tools/disallowedTools/model/permissionMode/maxTurns/skills/mcpServers/hooks/memory/background/effort/isolation/color/initialPrompt) | vendor doc | 2026-07-11 | verified |
 | docs.github.com/…/about-agent-skills + …/add-skills (`.github/.claude/.agents skills`, allowed-tools warning) | vendor doc | 2026-07-11 | verified |
 | docs.windsurf.com/windsurf/cascade/skills (`.windsurf/skills` + `.agents/skills`; Skills≠Rules≠Workflows) | vendor doc | 2026-07-11 | verified |
 | agentskills.io/specification (metadata = string→string; scripts/references/assets; allowed-tools experimental) | open spec | 2026-07-11 | verified |
@@ -608,13 +644,21 @@ Cited by name; **not re-fetched 2026-07-11** unless noted. Confidence labeled.
 Resolved since first draft (now **VERIFIED**, see §7 / ADR-004): Claude `.claude/rules/`
 path-scoping; Claude command↔skill compatibility + manual-only; Copilot Agent Skills +
 `.github/skills`/`.claude/skills`/`.agents/skills`; Windsurf `.windsurf/skills/` +
-`.agents/skills/`. Still open:
+`.agents/skills/`; the full Claude subagent frontmatter table (`tools`,
+`disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`,
+`hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`) —
+per-subagent worktree isolation, maxTurns and per-role memory are all **verified**, no
+longer open. Still open:
 
 - Exact current Cursor `.mdc` rule field set and Cursor skill folder/precedence/extensions
   (**PARTIAL** — official doc exists, details not fully readable).
 - Gemini `GEMINI.md`/custom-agent + skill-consent specifics.
-- Per-subagent worktree isolation, maxTurns, per-role memory on Claude.
+- Codex/Copilot/Cursor/Windsurf/Gemini subagent-equivalent frontmatter (none confirmed to
+  accept anything resembling Claude's field set).
 - `.agents/skills/` precedence when a repo also has `.claude/skills`/vendor paths.
+- Subagent-calls-subagent nesting on Claude.
+- `mcpServers`/`hooks`/`color`/`initialPrompt` are verified Claude subagent fields not yet
+  modeled in the kit's canonical Role schema (a scope gap, not a verification gap).
 - Exact "context rot" primary citation (industry report vs peer-reviewed).
 - Any peer-reviewed paper specifically analyzing `SKILL.md` (likely none yet → treat as
   emerging).

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
-import { collectSkills, collectBuildWarnings, validateSkillGovernance } from "../../engine/emitter.mjs";
+import { collectSkills, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -606,6 +606,150 @@ test("skills: metadata must be string→string — nested value dropped with a w
     "---\nname: bad-meta\ndescription: bad metadata demo\nmetadata:\n  good: \"1\"\n  nested:\n    x: y\n---\n\n# Bad\n");
   const warns = collectBuildWarnings(join(tmp));
   assert.ok(warns.some((x) => x.field === "metadata.nested"), "nested metadata must warn");
+});
+
+// ============================================================================
+// Role contract: capability/permission boundary
+// ============================================================================
+function writeRole(kitDir, filename, content) {
+  writeFileSync(join(kitDir, "engine", "roles", filename), content);
+}
+
+test("role: emitted subagent frontmatter is byte-identical for the 7 shipped roles (legacy flat tools/model)", () => {
+  const before = readFileSync(join(GOLDEN, ".claude", "agents", "architect.md"), "utf8");
+  const tmp = copyKit();
+  assert.equal(runKit(tmp, "build").status, 0);
+  const after = readFileSync(join(tmp, "out", ".claude", "agents", "architect.md"), "utf8");
+  assert.equal(after, before, "no nested permissions/runtime/skills/memory declared -> output unchanged");
+});
+
+test("role: governance — real kit's 7 shipped roles have zero errors/warnings", () => {
+  assert.deepEqual(validateRoleGovernance(KIT_ROOT), { errors: [], warnings: [] });
+});
+
+test("role: roleEffective merges legacy flat tools/model with canonical nested fields (nested wins)", () => {
+  const legacy = roleEffective({ tools: "Read, Grep, Bash", model: "sonnet" });
+  assert.deepEqual(legacy.allowTools, ["Read", "Grep", "Bash"]);
+  assert.equal(legacy.model, "sonnet");
+
+  const nested = roleEffective({ tools: "Read", model: "sonnet", runtime: { model: "opus", maxTurns: 10 }, permissions: { allowTools: ["Read", "Grep"] } });
+  assert.deepEqual(nested.allowTools, ["Read", "Grep"], "nested permissions.allowTools wins over legacy tools");
+  assert.equal(nested.model, "opus", "nested runtime.model wins over legacy model");
+  assert.equal(nested.maxTurns, 10);
+});
+
+test("role: allowTools/denyTools contradiction is rejected; build fails with no output", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "roles", "devops.md"), "utf8");
+  writeRole(tmp, "devops.md", md.replace("tools: Read, Grep, Glob, Bash\n", "tools: Read, Grep, Glob, Bash\npermissions:\n  denyTools:\n    - Bash\n"));
+  const r = validateRoleGovernance(tmp);
+  assert.match(r.errors.join("|"), /\[ROLE_PERMISSION_CONTRADICTION\]/);
+  const built = runKit(tmp, "build");
+  assert.equal(built.status, 1);
+  assert.ok(!existsSync(join(tmp, "out")), "no output for a role with a self-contradictory permission boundary");
+});
+
+test("role: invalid enum values (permissionMode/isolation/effort/memory/maxTurns) are rejected", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "roles", "planner.md"), "utf8");
+  writeRole(tmp, "planner.md", md.replace("model: sonnet\n", "model: sonnet\nruntime:\n  isolation: teleport\n  effort: extreme\n  maxTurns: -1\npermissions:\n  mode: godmode\nmemory:\n  scope: everywhere\n"));
+  const r = validateRoleGovernance(tmp);
+  for (const code of ["ROLE_PERMISSION_MODE_INVALID", "ROLE_ISOLATION_INVALID", "ROLE_EFFORT_INVALID", "ROLE_MEMORY_SCOPE_INVALID", "ROLE_MAX_TURNS_INVALID"])
+    assert.match(r.errors.join("|"), new RegExp(`\\[${code}\\]`), `expected ${code}`);
+});
+
+test("role: skill preload validates against a real skill id and rejects manual-only skills", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "roles", "reviewer.md"), "utf8");
+
+  writeRole(tmp, "reviewer.md", md.replace("model: opus\n", "model: opus\nskills:\n  preload:\n    - does-not-exist\n"));
+  assert.match(validateRoleGovernance(tmp).errors.join("|"), /\[ROLE_SKILL_PRELOAD_BROKEN_REFERENCE\]/);
+
+  const tmp2 = copyKit();
+  const manualSkill = join(tmp2, "engine", "skills", "manual-only");
+  mkdirSync(manualSkill, { recursive: true });
+  writeFileSync(join(manualSkill, "SKILL.md"), "---\nname: manual-only\ndescription: Use when invoked manually.\n---\n\n# x\n");
+  writeFileSync(join(manualSkill, "skill.kit.yaml"), "schemaVersion: 1\nid: manual-only\ninvocation:\n  implicit: false\n  manual: true\n");
+  const md2 = readFileSync(join(tmp2, "engine", "roles", "reviewer.md"), "utf8");
+  writeRole(tmp2, "reviewer.md", md2.replace("model: opus\n", "model: opus\nskills:\n  preload:\n    - manual-only\n"));
+  assert.match(validateRoleGovernance(tmp2).errors.join("|"), /\[ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT\]/);
+});
+
+test("role: description trigger-cue heuristic warns, non-blocking; output.requiredSections missing warns", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "roles", "qa.md"), "utf8");
+  writeRole(tmp, "qa.md", md
+    .replace(/description: .*\n/, "description: Does stuff sometimes.\n")
+    .replace("model: sonnet\n", "model: sonnet\noutput:\n  requiredSections:\n    - findings\n    - verdict\n"));
+  const r = validateRoleGovernance(tmp);
+  assert.match(r.warnings.join("|"), /\[ROLE_DESCRIPTION_TRIGGER_WEAK\]/);
+  assert.match(r.warnings.join("|"), /\[ROLE_OUTPUT_SECTION_MISSING\]/);
+  assert.equal(runKit(tmp, "build").status, 0, "warnings never block the build");
+});
+
+test("role: emitter maps canonical nested fields to real, verified Claude subagent frontmatter", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "roles", "architect.md"), "utf8");
+  writeRole(tmp, "architect.md",
+    md.replace("model: opus\n", "model: opus\npermissions:\n  denyTools:\n    - Write\n  mode: plan\nruntime:\n  maxTurns: 15\n  effort: high\n  isolation: worktree\n  background: true\nskills:\n  preload:\n    - code-review\nmemory:\n  scope: project\n"));
+  assert.equal(runKit(tmp, "build").status, 0);
+  const out = readFileSync(join(tmp, "out", ".claude", "agents", "architect.md"), "utf8");
+  assert.match(out, /disallowedTools: Write/);
+  assert.match(out, /permissionMode: plan/);
+  assert.match(out, /maxTurns: 15/);
+  assert.match(out, /effort: high/);
+  assert.match(out, /isolation: worktree/);
+  assert.match(out, /background: true/);
+  assert.match(out, /memory: project/);
+  assert.match(out, /skills:\n\s+- code-review/);
+});
+
+// ============================================================================
+// Rule contract: activation + enforcement.type
+// ============================================================================
+test("rule: ruleEffective derives activation/enforcement from legacy scope/paths/enforce", () => {
+  assert.deepEqual(ruleEffective({ scope: "always", enforce: "agent-read" }),
+    { activation: { mode: "always", paths: undefined }, enforcement: { type: "guidance", severity: undefined } });
+  assert.deepEqual(ruleEffective({ scope: "paths", paths: ["src/**"], enforce: "hook+agent-read" }),
+    { activation: { mode: "path", paths: ["src/**"] }, enforcement: { type: "hook", severity: undefined } });
+  assert.equal(ruleEffective({ scope: "always", enforce: "gate" }).enforcement.type, "static-check");
+  assert.equal(ruleEffective({ scope: "always", enforce: "generator" }).enforcement.type, "static-check");
+});
+
+test("rule: governance — real kit's rules have zero errors (hard-rules/consistency-guard/evidence-gate/conventions)", () => {
+  const cfg = parseYaml(readFileSync(join(KIT_ROOT, "kit.config.yaml"), "utf8"));
+  assert.deepEqual(validateRuleGovernance(KIT_ROOT, cfg), { errors: [], warnings: [] });
+});
+
+test("rule: duplicate id across rules is a conflict; build fails with no output", () => {
+  const tmp = copyKit();
+  const hardRules = readFileSync(join(tmp, "engine", "rules", "00-hard-rules.md"), "utf8");
+  writeFileSync(join(tmp, "engine", "rules", "00-hard-rules-dup.md"), hardRules); // same id: hard-rules
+  const cfg = parseYaml(readFileSync(join(tmp, "kit.config.yaml"), "utf8"));
+  assert.match(validateRuleGovernance(tmp, cfg).errors.join("|"), /\[RULE_ID_CONFLICT\]/);
+  const built = runKit(tmp, "build");
+  assert.equal(built.status, 1);
+  assert.ok(!existsSync(join(tmp, "out")), "no output when two rules share an id");
+});
+
+test("rule: invalid activation.mode / enforcement.type is rejected", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "rules", "00-hard-rules.md"), "utf8");
+  writeFileSync(join(tmp, "engine", "rules", "00-hard-rules.md"),
+    md.replace("scope: always", "scope: always\nactivation:\n  mode: telepathy").replace("enforce: agent-read", "enforce: agent-read\nenforcement:\n  type: vibes"));
+  const cfg = parseYaml(readFileSync(join(tmp, "kit.config.yaml"), "utf8"));
+  const r = validateRuleGovernance(tmp, cfg);
+  assert.match(r.errors.join("|"), /\[RULE_ACTIVATION_MODE_INVALID\]/);
+  assert.match(r.errors.join("|"), /\[RULE_ENFORCEMENT_TYPE_INVALID\]/);
+});
+
+test("rule: enforcement.type=hook without a real hook file is rejected", () => {
+  const tmp = copyKit();
+  const md = readFileSync(join(tmp, "engine", "rules", "15-evidence-gate.md"), "utf8");
+  writeFileSync(join(tmp, "engine", "rules", "15-evidence-gate.md"),
+    md.replace("enforce: gate", "enforce: gate\nenforcement:\n  type: hook"));
+  const cfg = parseYaml(readFileSync(join(tmp, "kit.config.yaml"), "utf8"));
+  assert.match(validateRuleGovernance(tmp, cfg).errors.join("|"), /\[RULE_HOOK_UNMAPPED\]/);
 });
 
 // ---- guard v2 audit log (E2E) ---------------------------------------------

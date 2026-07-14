@@ -47,11 +47,124 @@ export function collectRules(kitDir, cfg) {
   return rules;
 }
 
+// ---- Rule contract: activation + enforcement.type --------------------------
+// Canonical (kit-owned) fields — activation{mode,paths} and enforcement{type,severity} —
+// are a superset of the kit's original scope/paths/enforce frontmatter, which stays fully
+// supported and is auto-derived into the new shape when the new fields are absent.
+// `id.` maps rule.id -> the hook filename actually enforcing it (enforce:hook only).
+export const RULE_HOOK_MAP = { "consistency-guard": "consistency-guard.mjs" };
+export const RULE_OUTPUT_SECTION = /output format|required output|final output/i;
+export const RULE_ACTIVATION_MODES = ["always", "path", "glob", "model-decision", "manual"];
+export const RULE_ENFORCEMENT_TYPES = ["guidance", "static-check", "hook", "ci", "permission", "sandbox", "unsupported"];
+
+// Legacy `enforce:` token(s) -> the strongest canonical enforcement.type they imply.
+// "agent-read" is implicit for every rule (its Markdown is always shown to the agent),
+// so it only matters when nothing stronger is present.
+function legacyEnforceToType(enforce) {
+  const toks = String(enforce || "").split("+").map((t) => t.trim());
+  if (toks.includes("hook")) return "hook";
+  if (toks.includes("gate") || toks.includes("generator")) return "static-check";
+  if (toks.includes("agent-read")) return "guidance";
+  return undefined;
+}
+
+// Compute the effective, normalized activation/enforcement view of a rule, merging the
+// legacy scope/paths/enforce fields with the canonical nested ones (nested wins).
+export function ruleEffective(rule) {
+  rule = rule || {};
+  const activation = rule.activation || {
+    mode: rule.scope === "paths" ? "path" : "always",
+    paths: rule.paths,
+  };
+  const enforcement = rule.enforcement || { type: legacyEnforceToType(rule.enforce) };
+  return { activation, enforcement: { type: enforcement.type, severity: enforcement.severity } };
+}
+
+function gateSkillExists(kitDir) {
+  try { return collectSkills(kitDir).some((s) => RULE_OUTPUT_SECTION.test(s.body)); }
+  catch { return false; }
+}
+
+// Governance rules a Rule must not violate — checked BEFORE generation. A rule can never
+// claim an enforcement type the kit cannot back (hook with no hook file, static-check
+// with no gate skill), and no two rules across engine+profile may share an id (there is
+// no project-layer override for rules the way invariants have one, so any collision is
+// always a conflict). Pure/read-only.
+export function validateRuleGovernance(kitDir, cfg) {
+  const errors = [];
+  const warnings = [];
+  const err = (code, msg) => errors.push(`[${code}] ${msg}`);
+  const seen = new Set();
+
+  for (const r of collectRules(kitDir, cfg || {})) {
+    if (!r.id) { err("RULE_ID_MISSING", `rule thiếu id (title="${r.title || "?"}")`); continue; }
+    if (seen.has(r.id)) err("RULE_ID_CONFLICT", `rule id "${r.id}" trùng lặp giữa engine/profile -> đổi tên id`);
+    seen.add(r.id);
+
+    const { activation, enforcement } = ruleEffective(r);
+    if (!RULE_ACTIVATION_MODES.includes(activation.mode))
+      err("RULE_ACTIVATION_MODE_INVALID", `rule "${r.id}": activation.mode "${activation.mode}" không hợp lệ -> dùng ${RULE_ACTIVATION_MODES.join(" | ")}`);
+    if (!enforcement.type || !RULE_ENFORCEMENT_TYPES.includes(enforcement.type))
+      err("RULE_ENFORCEMENT_TYPE_INVALID", `rule "${r.id}": enforcement.type "${enforcement.type}" không hợp lệ -> dùng ${RULE_ENFORCEMENT_TYPES.join(" | ")}`);
+    else if (enforcement.type === "hook") {
+      const mapped = RULE_HOOK_MAP[r.id];
+      if (!mapped) err("RULE_HOOK_UNMAPPED", `rule "${r.id}": enforcement.type=hook nhưng chưa có mapping trong RULE_HOOK_MAP`);
+      else if (!existsSync(join(kitDir, ".kit/hooks", mapped)))
+        err("RULE_HOOK_MISSING", `rule "${r.id}": enforcement.type=hook nhưng thiếu .kit/hooks/${mapped}`);
+    } else if (enforcement.type === "static-check" && !gateSkillExists(kitDir)) {
+      err("RULE_STATIC_CHECK_NO_BACKING", `rule "${r.id}": enforcement.type=static-check nhưng không skill nào có mục output format`);
+    }
+  }
+  return { errors, warnings };
+}
+
 export function collectRoles(kitDir) {
   return listMdAt(kitDir, "engine/roles").map((f) => {
     const { fm, body } = parseFrontmatter(readAt(kitDir, join("engine/roles", f)));
     return { fm, body: body.trim() };
   });
+}
+
+// ---- Role contract: capability/permission boundary --------------------------
+// Canonical (kit-owned) authoring shape is nested — permissions{allowTools,denyTools,
+// mode}, runtime{model,effort,maxTurns,isolation,background}, skills{preload},
+// memory{scope}, output{requiredSections} — translated by the Claude emitter into
+// Claude's real, VERIFIED subagent frontmatter fields (code.claude.com/docs/en/
+// sub-agents, 2026-07-11): tools, disallowedTools, model, permissionMode, maxTurns,
+// skills, isolation, background, effort, memory. The legacy flat `tools:`/`model:`
+// fields (the kit's original format) remain fully supported — this is additive, not a
+// breaking migration, since there is no external spec to converge to for Roles (unlike
+// Skills). Fields with no verified vendor equivalent are NOT invented or emitted.
+export const ROLE_PERMISSION_MODES = ["default", "acceptEdits", "auto", "dontAsk", "bypassPermissions", "plan", "manual"];
+export const ROLE_ISOLATION_MODES = ["none", "worktree"];
+export const ROLE_EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
+export const ROLE_MEMORY_SCOPES = ["none", "user", "project", "local"];
+
+function toToolList(v) {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") return v.split(",").map((t) => t.trim()).filter(Boolean);
+  return [];
+}
+
+// Compute the effective, normalized capability/permission view of a role's frontmatter,
+// merging the legacy flat fields with the canonical nested ones (nested wins if both
+// are set for the same concept — e.g. runtime.model over legacy model).
+export function roleEffective(fm) {
+  fm = fm || {};
+  const allowTools = fm.permissions?.allowTools ? toToolList(fm.permissions.allowTools) : toToolList(fm.tools);
+  return {
+    allowTools,
+    denyTools: toToolList(fm.permissions?.denyTools),
+    permissionMode: fm.permissions?.mode,
+    model: fm.runtime?.model || fm.model,
+    effort: fm.runtime?.effort,
+    maxTurns: fm.runtime?.maxTurns,
+    isolation: fm.runtime?.isolation,
+    background: fm.runtime?.background,
+    skillsPreload: Array.isArray(fm.skills?.preload) ? fm.skills.preload : [],
+    memoryScope: fm.memory?.scope,
+    outputRequiredSections: Array.isArray(fm.output?.requiredSections) ? fm.output.requiredSections : [],
+  };
 }
 
 export function collectCommands(kitDir) {
@@ -308,6 +421,58 @@ export function validateSkillGovernance(kitDir) {
   return { errors, warnings };
 }
 
+// Governance rules a Role must not violate — checked BEFORE generation. A role can
+// never declare a self-contradictory permission boundary, preload a skill that does not
+// exist or that cannot be preloaded (Claude skips a `disable-model-invocation` skill and
+// only logs a debug warning — the kit surfaces this loudly instead, at build time).
+// Pure/read-only. Same `[CODE]`-tagged message convention as validateSkillGovernance.
+export function validateRoleGovernance(kitDir) {
+  const errors = [];
+  const warnings = [];
+  const err = (code, msg) => errors.push(`[${code}] ${msg}`);
+  const wrn = (code, msg) => warnings.push(`[${code}] ${msg}`);
+  const skillById = new Map(collectSkills(kitDir).map((s) => [s.id, s]));
+
+  for (const role of collectRoles(kitDir)) {
+    const fm = role.fm || {};
+    const name = fm.name || "?";
+    const tag = `role "${name}"`;
+    const eff = roleEffective(fm);
+
+    const allowSet = new Set(eff.allowTools);
+    for (const t of eff.denyTools)
+      if (allowSet.has(t)) err("ROLE_PERMISSION_CONTRADICTION", `${tag}: tool "${t}" vừa allowTools vừa denyTools -> mâu thuẫn`);
+
+    if (eff.permissionMode !== undefined && !ROLE_PERMISSION_MODES.includes(eff.permissionMode))
+      err("ROLE_PERMISSION_MODE_INVALID", `${tag}: permissions.mode "${eff.permissionMode}" không hợp lệ -> dùng ${ROLE_PERMISSION_MODES.join(" | ")}`);
+    if (eff.isolation !== undefined && !ROLE_ISOLATION_MODES.includes(eff.isolation))
+      err("ROLE_ISOLATION_INVALID", `${tag}: runtime.isolation "${eff.isolation}" không hợp lệ -> dùng ${ROLE_ISOLATION_MODES.join(" | ")}`);
+    if (eff.effort !== undefined && !ROLE_EFFORT_LEVELS.includes(eff.effort))
+      err("ROLE_EFFORT_INVALID", `${tag}: runtime.effort "${eff.effort}" không hợp lệ -> dùng ${ROLE_EFFORT_LEVELS.join(" | ")}`);
+    if (eff.memoryScope !== undefined && !ROLE_MEMORY_SCOPES.includes(eff.memoryScope))
+      err("ROLE_MEMORY_SCOPE_INVALID", `${tag}: memory.scope "${eff.memoryScope}" không hợp lệ -> dùng ${ROLE_MEMORY_SCOPES.join(" | ")}`);
+    if (eff.maxTurns !== undefined && (!Number.isInteger(eff.maxTurns) || eff.maxTurns < 1))
+      err("ROLE_MAX_TURNS_INVALID", `${tag}: runtime.maxTurns phải là số nguyên dương`);
+
+    for (const sid of eff.skillsPreload) {
+      const skill = skillById.get(sid);
+      if (!skill) { err("ROLE_SKILL_PRELOAD_BROKEN_REFERENCE", `${tag}: preload skill "${sid}" không tồn tại`); continue; }
+      if (skill.gov?.invocation?.implicit === false)
+        err("ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT", `${tag}: skill "${sid}" có disable-model-invocation (manual-only) -> không thể preload (Claude sẽ bỏ qua và chỉ ghi log debug)`);
+    }
+
+    if (!fm.description) wrn("ROLE_DESCRIPTION_MISSING", `${tag}: thiếu description`);
+    else if (!TRIGGER_CUES.some((re) => re.test(fm.description)))
+      wrn("ROLE_DESCRIPTION_TRIGGER_WEAK", `${tag}: description không có cue rõ ràng cho việc delegate (vd "use when", "invoke for", "dùng khi") -> agent khó tự chọn role (heuristic, có thể false positive)`);
+
+    for (const sec of eff.outputRequiredSections) {
+      if (!new RegExp(`##\\s*${sec}`, "i").test(role.body))
+        wrn("ROLE_OUTPUT_SECTION_MISSING", `${tag}: body thiếu mục output bắt buộc "${sec}"`);
+    }
+  }
+  return { errors, warnings };
+}
+
 // Merge invariants across layers: engine → profile → project (F-07). Each invariant
 // gets a stable id (explicit `id` or slug of its path); a duplicate id is a conflict
 // unless the PROJECT layer explicitly sets `override: true` over a lower layer.
@@ -400,11 +565,23 @@ function emitCursorRule(rule, S) {
 
 function emitAgent(role, S) {
   const fm = role.fm;
+  const eff = roleEffective(fm);
   const lines = [`# ${S.generated_banner}`];
-  for (const k of ["name", "description", "tools", "model"]) {
-    if (fm[k] === undefined || fm[k] === null) continue;
-    lines.push(`${k}: ${k === "description" ? y(fm[k]) : fm[k]}`);
+  if (fm.name !== undefined) lines.push(`name: ${fm.name}`);
+  if (fm.description !== undefined) lines.push(`description: ${y(fm.description)}`);
+  if (eff.allowTools.length) lines.push(`tools: ${eff.allowTools.join(", ")}`);
+  if (eff.denyTools.length) lines.push(`disallowedTools: ${eff.denyTools.join(", ")}`);
+  if (eff.model !== undefined) lines.push(`model: ${eff.model}`);
+  if (eff.permissionMode !== undefined) lines.push(`permissionMode: ${eff.permissionMode}`);
+  if (eff.maxTurns !== undefined) lines.push(`maxTurns: ${eff.maxTurns}`);
+  if (eff.skillsPreload.length) {
+    lines.push("skills:");
+    for (const s of eff.skillsPreload) lines.push(`  - ${s}`);
   }
+  if (eff.isolation !== undefined && eff.isolation !== "none") lines.push(`isolation: ${eff.isolation}`);
+  if (eff.background !== undefined) lines.push(`background: ${eff.background}`);
+  if (eff.effort !== undefined) lines.push(`effort: ${eff.effort}`);
+  if (eff.memoryScope !== undefined && eff.memoryScope !== "none") lines.push(`memory: ${eff.memoryScope}`);
   return `---\n${lines.join("\n")}\n---\n\n${role.body}\n`;
 }
 
