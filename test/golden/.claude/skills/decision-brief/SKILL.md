@@ -1,0 +1,33 @@
+---
+# GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
+name: "decision-brief"
+description: "Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building."
+license: "Proprietary"
+compatibility: "Requires repository read access."
+---
+
+# Decision Brief skill
+
+Turn a vague request into information a non-technical founder can decide on — *before* anyone plans or writes code. Frame the request as a problem, not the feature the founder guessed at.
+
+## Workflow
+1. **Reframe** the request as the underlying problem and who has it. State it in one plain sentence and confirm.
+2. **Explore options** — at least two ways to solve it (including the cheapest/manual one and "do nothing"), each with an honest trade-off. The smallest option that still teaches us something usually wins.
+3. **Size it roughly** — effort, cost, and the risk most likely to make it a waste. Label every number an estimate; never present a guess as a fact.
+4. **Isolate the founder's decision** — the one or two questions only they can answer (budget, audience, acceptable risk), asked in plain language.
+5. **Recommend** one option and define what "done" looks like in a sentence they would accept.
+
+## Output format (required)
+```md
+## The real problem
+## Who it's for (and the job they're hiring it to do)
+## Options
+| Option | What it is | Trade-off | Rough effort (estimate) |
+|---|---|---|---|
+## Cost & risk (estimates)
+## Smallest slice worth building
+## Questions only the founder can answer
+## Recommendation
+## What "done" looks like
+```
+Empty **Options** or **Recommendation** fails the evidence gate — a brief with no real choice is not a decision. Keep the whole thing in plain, non-technical language.

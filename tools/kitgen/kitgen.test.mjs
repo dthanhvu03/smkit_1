@@ -940,8 +940,8 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.match(b.estimateMethod, /heuristic/i);
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
-  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 7, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 6, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 8, "one catalog item per shipped role");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 7, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);

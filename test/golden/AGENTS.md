@@ -31,6 +31,7 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - No secrets in code. Use env/config.
 
 ## Roles
+- **analyst** — Use FIRST when a request is vague, new, or comes from a non-technical person — before any planning, design, or code. Invoke for turning a fuzzy idea into a decision the founder can make. Not for step sequencing (planner) or structural/interface design (architect).
 - **architect** — Use when a change affects structure, module boundaries, interfaces, data shape, or library choice. Invoke for system design, tradeoff decisions, and recording them in the Decision Log. Not for step sequencing (that is the planner).
 - **devops** — Use for release, build, deploy, backup, and environment or CI tasks. Invoke for shipping, operational safety, and infrastructure changes.
 - **implementer** — Use to write or edit code once a plan or decision exists. Invoke for building features, fixing bugs, and wiring things up while following existing patterns. The default worker for changing code.
@@ -41,6 +42,7 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 
 ## Skills
 - **code-review** — Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
+- **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
 - **guard-design** — Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
 - **refactor** — Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code.
 - **release-check** — Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict.
@@ -50,5 +52,6 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 ## Commands
 - `/checkup` — Audit the project against its Constitution and Decision Log, report drift in plain language, and offer to fix it.
 - `/decide` — Append a technical decision to the Decision Log so future sessions stay consistent.
+- `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/start` — Begin (or resume) work. Reads the project memory, plans the smallest next step, and builds it per the current mode.
