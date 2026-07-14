@@ -650,7 +650,7 @@ test("role: emitted subagent frontmatter is byte-identical for the 7 shipped rol
   assert.equal(after, before, "no nested permissions/runtime/skills/memory declared -> output unchanged");
 });
 
-test("role: governance — real kit's 8 shipped roles have zero errors/warnings", () => {
+test("role: governance — real kit's 12 shipped roles have zero errors/warnings", () => {
   assert.deepEqual(validateRoleGovernance(KIT_ROOT), { errors: [], warnings: [] });
 });
 
@@ -978,7 +978,7 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.match(b.estimateMethod, /heuristic/i);
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
-  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 8, "one catalog item per shipped role");
+  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 12, "one catalog item per shipped role");
   assert.ok(b.alwaysLoaded.skillCatalog.items.length === 9, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
