@@ -415,6 +415,36 @@ const TRIGGER_CUES = [
   /dùng khi/i, /sử dụng khi/i, /áp dụng khi/i, /gọi khi/i, /invoke khi/i, /khi cần/i,
 ];
 
+// Senior-completeness rubric (heuristic, WARN — the "hiring bar"). A role body should
+// read like a senior playbook across three dimensions: what to do FIRST on a task, where
+// its BOUNDARY is (hand-off / separation of duties, so it never plans+builds+reviews its
+// own work), and how it VERIFIES quality / defines done. Multilingual, best-effort — a
+// missing dimension is a nudge, never a build blocker.
+const SENIORITY_CUES = {
+  "a first move (what to do first)": [
+    /\bfirst\b/i, /\bstart by\b/i, /\bbegin by\b/i, /\bon receiving\b/i, /\bin this order\b/i,
+    /\bbefore (you|creating|acting|reporting|anything|writing)\b/i,
+    /\btrước tiên\b/i, /\bđầu tiên\b/i, /\bkhi nhận\b/i, /\bbắt đầu\b/i,
+  ],
+  "a boundary / hand-off": [
+    /\bnot for\b/i, /\bdo(?:es)? not\b/i, /\bdon'?t\b/i,
+    /\bhand (?:off|back|it|the|them|those|runtime|structural|implementation)\b/i,
+    /\bthat'?s the (?:planner|architect|implementer|reviewer|qa|analyst|devops|orchestrator)\b/i,
+    /\byou delegate\b/i, /\bkhông phải\b/i, /\bbàn giao\b/i, /\bchuyển cho\b/i,
+  ],
+  "a verification / done bar": [
+    /\bverif/i, /\btest/i, /\bevidence\b/i, /\bcheck\b/i, /\bconfirm/i, /\breview\b/i,
+    /\bdone\b/i, /\bprove\b/i, /\brun the\b/i,
+    /\bkiểm/i, /\bxác nhận\b/i, /\bbằng chứng\b/i, /\bhoàn thành\b/i,
+  ],
+};
+function seniorityGaps(body) {
+  const text = String(body || "");
+  return Object.entries(SENIORITY_CUES)
+    .filter(([, res]) => !res.some((re) => re.test(text)))
+    .map(([dim]) => dim);
+}
+
 // Deterministic content-hash scope: the SKILL.md source as authored + every supporting
 // file under scripts/references/assets, sorted by path. skill.kit.yaml (governance) and
 // tests/ are OUT of scope — pinning covers the skill's actual behavior, not its metadata.
@@ -569,6 +599,11 @@ export function validateRoleGovernance(kitDir, lang = "vi") {
     if (!fm.description) wrn("ROLE_DESCRIPTION_MISSING", { tag });
     else if (!TRIGGER_CUES.some((re) => re.test(fm.description)))
       wrn("ROLE_DESCRIPTION_TRIGGER_WEAK", { tag });
+
+    // Senior-completeness rubric (the hiring bar): a role's body should read like a
+    // senior playbook — first move, boundary/hand-off, and a verification/done bar.
+    const gaps = seniorityGaps(role.body);
+    if (gaps.length) wrn("ROLE_SENIORITY_INCOMPLETE", { tag, missing: gaps.join("; ") });
 
     for (const sec of eff.outputRequiredSections) {
       if (!new RegExp(`##\\s*${sec}`, "i").test(role.body))

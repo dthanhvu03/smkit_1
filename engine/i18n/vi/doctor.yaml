@@ -87,6 +87,7 @@ ROLE_SKILL_PRELOAD_BROKEN_REFERENCE: "{tag}: preload skill \"{sid}\" không tồ
 ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT: "{tag}: skill \"{sid}\" có disable-model-invocation (manual-only) -> không thể preload (Claude sẽ bỏ qua và chỉ ghi log debug)"
 ROLE_DESCRIPTION_MISSING: "{tag}: thiếu description"
 ROLE_DESCRIPTION_TRIGGER_WEAK: "{tag}: description không có cue rõ ràng cho việc delegate (vd \"use when\", \"invoke for\", \"dùng khi\") -> agent khó tự chọn role (heuristic, có thể false positive)"
+ROLE_SENIORITY_INCOMPLETE: "{tag}: thân role còn mỏng so với chuẩn senior — thiếu {missing} (rubric heuristic hiring-bar, có thể false positive)"
 ROLE_OUTPUT_SECTION_MISSING: "{tag}: body thiếu mục output bắt buộc \"{section}\""
 
 # --- emitter.mjs: rule governance ----------------------------------------------

@@ -87,6 +87,7 @@ ROLE_SKILL_PRELOAD_BROKEN_REFERENCE: "{tag}: preload skill \"{sid}\" does not ex
 ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT: "{tag}: skill \"{sid}\" has disable-model-invocation (manual-only) -> it cannot be preloaded (Claude would skip it and only log a debug warning)"
 ROLE_DESCRIPTION_MISSING: "{tag}: missing description"
 ROLE_DESCRIPTION_TRIGGER_WEAK: "{tag}: description has no clear delegation cue (e.g. \"use when\", \"invoke for\", \"dùng khi\") -> the agent may have trouble self-selecting this role (heuristic, may be a false positive)"
+ROLE_SENIORITY_INCOMPLETE: "{tag}: body reads thin for a senior role — no clear {missing} (heuristic hiring-bar check, may be a false positive)"
 ROLE_OUTPUT_SECTION_MISSING: "{tag}: body is missing the required output section \"{section}\""
 
 # --- emitter.mjs: rule governance ----------------------------------------------

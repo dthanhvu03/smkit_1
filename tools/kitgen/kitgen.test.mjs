@@ -650,7 +650,7 @@ test("role: emitted subagent frontmatter is byte-identical for the 7 shipped rol
   assert.equal(after, before, "no nested permissions/runtime/skills/memory declared -> output unchanged");
 });
 
-test("role: governance — real kit's 7 shipped roles have zero errors/warnings", () => {
+test("role: governance — real kit's 8 shipped roles have zero errors/warnings", () => {
   assert.deepEqual(validateRoleGovernance(KIT_ROOT), { errors: [], warnings: [] });
 });
 
@@ -712,6 +712,17 @@ test("role: description trigger-cue heuristic warns, non-blocking; output.requir
   assert.match(r.warnings.join("|"), /\[ROLE_DESCRIPTION_TRIGGER_WEAK\]/);
   assert.match(r.warnings.join("|"), /\[ROLE_OUTPUT_SECTION_MISSING\]/);
   assert.equal(runKit(tmp, "build").status, 0, "warnings never block the build");
+});
+
+test("role: seniority rubric warns on a thin body (heuristic hiring-bar), non-blocking", () => {
+  const tmp = copyKit();
+  // Valid trigger cue in the description, but a one-line body with no first move,
+  // no boundary/hand-off, and no verification/done bar → not senior-complete.
+  writeRole(tmp, "qa.md", "---\nname: qa\ndescription: Use when a feature must be validated.\ntools: Read, Bash\nmodel: sonnet\n---\n\nYou do the thing.\n");
+  const r = validateRoleGovernance(tmp);
+  assert.match(r.warnings.join("|"), /\[ROLE_SENIORITY_INCOMPLETE\]/);
+  assert.match(r.warnings.join("|"), /first move.*boundary.*verification/);
+  assert.equal(runKit(tmp, "build").status, 0, "a thin senior body warns, never blocks");
 });
 
 test("role: emitter maps canonical nested fields to real, verified Claude subagent frontmatter", () => {
