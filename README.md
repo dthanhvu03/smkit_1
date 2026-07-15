@@ -13,20 +13,25 @@ AI coding agents drift: each session they re-decide structure, invent a second w
 
 ## Quick start
 
-Get the kit into your project, then run the setup interview.
+**One command** — run it inside your project (new or existing) and answer a few questions:
 
 ```bash
-# Option A — scaffold into a new folder (no install), then answer a few questions:
-npx degit dthanhvu03/smkit_1 my-app
-cd my-app
-npm run init          # or: node tools/kitgen/init.mjs
+npx @zusem/smkit init
+```
 
-# Option B — scripted / CI (no prompts):
-node tools/kitgen/init.mjs --name "Barber Booking" --stack generic \
+That's it: no install, no clone. Other ways if you prefer:
+
+```bash
+# Scripted / CI (no prompts):
+npx @zusem/smkit init --name "Barber Booking" --stack generic \
   --mode vibe --lang en --agents claude,cursor,copilot,windsurf,agentsmd
 
-# Option C — already have the files? just:
-npm run init
+# Or install the CLI globally:
+npm i -g @zusem/smkit
+smkit init
+
+# Or from source (no npm): download the repo ZIP or clone, then:
+node tools/kitgen/init.mjs
 ```
 
 `init` asks plain-language questions (what are you building? who uses it? what must it
