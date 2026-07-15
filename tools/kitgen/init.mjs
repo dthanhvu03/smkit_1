@@ -20,15 +20,26 @@ const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const kp = (...s) => join(KIT_DIR, ...s);
 const pp = (...s) => join(PROJECT_DIR, ...s);
 
+// Last-resort guard for this top-level-await module: any error (sync throw or a
+// rejected top-level await) exits cleanly with a one-line message, never a stack trace.
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => { console.error(`smkit init: ${e?.message || e}`); process.exit(1); });
+}
+
 // ---- args -----------------------------------------------------------------
 const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(`--${name}`); return i !== -1 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : undefined; };
 const has = (name) => args.includes(`--${name}`);
 const DRY = has("dry-run"), FORCE = has("force"), YES = has("yes");
 
-const profiles = existsSync(kp("profiles"))
-  ? readdirSync(kp("profiles")).filter((d) => existsSync(kp("profiles", d, "profile.yaml")))
-  : ["generic"];
+// Degrade to the built-in "generic" if profiles/ is missing or unreadable.
+let profiles;
+try {
+  profiles = existsSync(kp("profiles"))
+    ? readdirSync(kp("profiles")).filter((d) => existsSync(kp("profiles", d, "profile.yaml")))
+    : ["generic"];
+} catch { profiles = ["generic"]; }
+if (!profiles.length) profiles = ["generic"];
 
 // ---- prompting ------------------------------------------------------------
 const PRESET_KEYS = ["name", "lang", "stack", "mode", "agents", "purpose", "users", "never"];
@@ -128,7 +139,11 @@ ${answers.never || "<e.g. no destructive database operations in production>"}
 - Mode: ${answers.mode}
 `;
 
-const decisionsSeed = readFileSync(kp(".kit", "decisions.template.md"), "utf8");
+// Seed the Decision Log from the template if present; a missing template must not
+// abort setup — fall back to a minimal header.
+const decisionsSeed = existsSync(kp(".kit", "decisions.template.md"))
+  ? readFileSync(kp(".kit", "decisions.template.md"), "utf8")
+  : "# Decision Log\n\n> Record non-trivial technical decisions here so future sessions stay consistent.\n";
 
 // ---- write / dry-run ------------------------------------------------------
 console.log(`\nkit init — ${answers.name}  (stack=${answers.stack}, mode=${answers.mode}, lang=${answers.lang}, agents=${agentsList.join("+")})\n`);
