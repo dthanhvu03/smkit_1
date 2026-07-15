@@ -285,4 +285,13 @@ function main() {
   for (const rel of [...outputs.keys()].sort()) console.log(`  ${outDir}/${rel}`);
 }
 
-main();
+// Last-resort guard: an unexpected internal error must exit cleanly (exit 1) with a
+// one-line message, never a raw stack trace. Filesystem safety is already handled inside
+// main() — applyBuild is transactional and rolls back — so this only covers the
+// read/validate/build phase before any write (and doctor, which writes nothing).
+try {
+  main();
+} catch (e) {
+  console.error(`smkit: unexpected error — nothing was written (${e?.message || e}).`);
+  process.exit(1);
+}

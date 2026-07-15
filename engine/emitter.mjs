@@ -41,7 +41,12 @@ export function loadDoctorStrings(kitDir, lang = "vi") {
   if (DOCTOR_STRINGS_CACHE.has(key)) return DOCTOR_STRINGS_CACHE.get(key);
   const f = join(kitDir, "engine", "i18n", lang, "doctor.yaml");
   const fb = join(kitDir, "engine", "i18n", "vi", "doctor.yaml");
-  const strings = parseYaml(readFileSync(existsSync(f) ? f : fb, "utf8"));
+  // Degrade gracefully: a missing/corrupt catalog must never crash doctor or build.
+  // fmt() then renders each message as "[CODE]" (greppable, non-fatal) instead of
+  // throwing ENOENT/YamlError up through validateConfig into an unguarded caller.
+  let strings;
+  try { strings = parseYaml(readFileSync(existsSync(f) ? f : fb, "utf8")) || {}; }
+  catch { strings = {}; }
   DOCTOR_STRINGS_CACHE.set(key, strings);
   return strings;
 }
