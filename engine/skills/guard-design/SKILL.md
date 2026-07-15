@@ -1,7 +1,7 @@
 ---
 name: guard-design
 description: Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access and git.
 metadata:
   sixmen-version: "1.0.0"

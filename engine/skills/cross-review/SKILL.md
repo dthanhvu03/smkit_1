@@ -1,7 +1,7 @@
 ---
 name: cross-review
 description: Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access.
 metadata:
   sixmen-version: "1.0.0"

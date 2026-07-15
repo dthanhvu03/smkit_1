@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Use when a change touches auth, secrets, shell/command execution, file access, or the guard/hooks. Invoke for a risk assessment with concrete exploit scenarios and fixes.
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access and git.
 metadata:
   sixmen-version: "1.0.0"

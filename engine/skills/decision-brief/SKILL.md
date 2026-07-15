@@ -1,7 +1,7 @@
 ---
 name: decision-brief
 description: Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access.
 metadata:
   sixmen-version: "1.0.0"

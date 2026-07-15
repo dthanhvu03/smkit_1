@@ -1,7 +1,7 @@
 {
-  "name": "universal-agent-kit",
+  "name": "smkit",
   "version": "0.1.0",
-  "description": "Guardrails and consistency for AI coding agents — for everyone, on any stack. One source generates Claude Code and Cursor config.",
+  "description": "Guardrails and consistency for AI coding agents — for everyone, on any stack. One source generates config for Claude Code, Cursor, Copilot, Windsurf, and the AGENTS.md standard.",
   "type": "module",
   "bin": {
     "smkit": "tools/kitgen/cli.mjs"
@@ -16,8 +16,10 @@
   "files": [
     "engine",
     "profiles",
-    ".kit",
     "tools",
+    ".kit/hooks",
+    ".kit/constitution.template.md",
+    ".kit/decisions.template.md",
     "kit.config.yaml",
     "README.md"
   ],
@@ -33,5 +35,5 @@
     "guardrails",
     "scaffolding"
   ],
-  "license": "MIT"
+  "license": "Apache-2.0"
 }
