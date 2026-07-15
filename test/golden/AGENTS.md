@@ -62,4 +62,5 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
+- `/ship` — Take a request from idea to shipped — discovery, critique, design, build, review, QA, and deploy — running the whole team pipeline and pausing only where you must decide. For a whole feature; use /start for a small next step.
 - `/start` — Begin (or resume) work. Reads the project memory, plans the smallest next step, and builds it per the current mode.

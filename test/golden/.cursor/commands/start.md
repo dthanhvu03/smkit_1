@@ -2,6 +2,8 @@
 
 # /start
 
+> Use `/start` for the **smallest next step**. To deliver a **whole feature** A→Z (discovery → build → review → deploy) in one orchestrated run, use `/ship` instead.
+
 1. Read `.kit/constitution.md` and `.kit/decisions.md`. Obey them.
 2. If the user gave a request, restate it in one plain sentence and confirm. If not, ask what they want to build.
    - If the idea is **vague or a brand-new feature**, run discovery first (`/discover`, the analyst role): produce a decision brief and confirm the real problem before building. Scale to the mode — `vibe`: a 3–5 sentence brief inline; `standard`/`strict`: the full brief (strict also records sign-off).
