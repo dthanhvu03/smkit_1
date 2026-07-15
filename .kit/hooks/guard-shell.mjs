@@ -24,7 +24,16 @@ process.stdin.on("end", async () => {
     process.exit(2);
   }
 
-  const { decision, reason, segment } = classifyCommand(cmd, { mode, block });
+  // Fail CLOSED on an unexpected analysis error — block rather than let an
+  // un-analysed command through (consistent with the unparseable-input path above).
+  let decision, reason, segment;
+  try {
+    ({ decision, reason, segment } = classifyCommand(cmd, { mode, block }));
+  } catch (e) {
+    auditLog({ ts: Date.now(), mode, decision: "block", reason: `guard internal error: ${e?.message || e}`, cmd });
+    process.stderr.write("kit guardrail: internal error analysing the command; blocking to be safe.\n");
+    process.exit(2);
+  }
   auditLog({ ts: Date.now(), mode, decision, reason, segment, cmd });
 
   if (decision === "block") {

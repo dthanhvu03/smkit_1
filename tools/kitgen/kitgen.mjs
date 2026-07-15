@@ -97,16 +97,22 @@ function runDoctor() {
     catch (e) { err("Generated output", fmt(strings, "GENERATED_OUTPUT_BUILD_FAILED", { message: e.message }), "GENERATED_OUTPUT_BUILD_FAILED"); }
   }
 
-  // 4. Drift — classified against the ownership manifest (F-08).
+  // 4. Drift — classified against the ownership manifest (F-08). Wrapped so an
+  // unreadable directory (permissions) degrades to one warning instead of aborting
+  // the whole health-check.
   if (outputs) {
-    const { missing, modified, stale, unexpected } = classifyDrift({ outDir, outputs, projectDir: PROJECT_DIR });
-    for (const r of missing) err("Generated output", fmt(strings, "MISSING_OWNED", { outDir, rel: r }), "MISSING_OWNED");
-    for (const r of modified) err("Generated output", fmt(strings, "MODIFIED_OWNED", { outDir, rel: r }), "MODIFIED_OWNED");
-    for (const r of stale) warn("Generated output", fmt(strings, "STALE_OWNED", { outDir, rel: r }), "STALE_OWNED");
-    for (const r of unexpected) warn("Generated output", fmt(strings, "UNEXPECTED_UNOWNED", { outDir, rel: r }), "UNEXPECTED_UNOWNED");
-    const driftN = missing.length + modified.length;
-    if (driftN) err("Generated output", fmt(strings, "GENERATED_OUTPUT_DRIFT", { outDir, count: driftN }), "DRIFT");
-    else if (!stale.length && !unexpected.length) ok("Generated output", fmt(strings, "GENERATED_OUTPUT_MATCH", { count: outputs.size, outDir }), "GENERATED_OUTPUT_MATCH");
+    try {
+      const { missing, modified, stale, unexpected } = classifyDrift({ outDir, outputs, projectDir: PROJECT_DIR });
+      for (const r of missing) err("Generated output", fmt(strings, "MISSING_OWNED", { outDir, rel: r }), "MISSING_OWNED");
+      for (const r of modified) err("Generated output", fmt(strings, "MODIFIED_OWNED", { outDir, rel: r }), "MODIFIED_OWNED");
+      for (const r of stale) warn("Generated output", fmt(strings, "STALE_OWNED", { outDir, rel: r }), "STALE_OWNED");
+      for (const r of unexpected) warn("Generated output", fmt(strings, "UNEXPECTED_UNOWNED", { outDir, rel: r }), "UNEXPECTED_UNOWNED");
+      const driftN = missing.length + modified.length;
+      if (driftN) err("Generated output", fmt(strings, "GENERATED_OUTPUT_DRIFT", { outDir, count: driftN }), "DRIFT");
+      else if (!stale.length && !unexpected.length) ok("Generated output", fmt(strings, "GENERATED_OUTPUT_MATCH", { count: outputs.size, outDir }), "GENERATED_OUTPUT_MATCH");
+    } catch (e) {
+      warn("Generated output", `drift check skipped (${e?.message || e})`, "DRIFT_CHECK_FAILED");
+    }
   }
 
   // Hooks: settings cross-check (WARN)
@@ -285,4 +291,13 @@ function main() {
   for (const rel of [...outputs.keys()].sort()) console.log(`  ${outDir}/${rel}`);
 }
 
-main();
+// Last-resort guard: an unexpected internal error must exit cleanly (exit 1) with a
+// one-line message, never a raw stack trace. Filesystem safety is already handled inside
+// main() — applyBuild is transactional and rolls back — so this only covers the
+// read/validate/build phase before any write (and doctor, which writes nothing).
+try {
+  main();
+} catch (e) {
+  console.error(`smkit: unexpected error — nothing was written (${e?.message || e}).`);
+  process.exit(1);
+}

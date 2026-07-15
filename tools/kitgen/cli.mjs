@@ -23,4 +23,5 @@ switch (cmd) {
       "  doctor  health-check the kit + generated output");
     process.exit(cmd && cmd !== "help" && cmd !== "--help" ? 1 : 0);
 }
-process.exit(r.status ?? 1);
+if (r?.error) console.error(`smkit: could not start ${cmd} (${r.error.message}).`);
+process.exit(r?.status ?? 1);
