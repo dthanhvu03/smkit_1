@@ -53,7 +53,10 @@ answers.name = await ask({ key: "name", q: "What is your project called?" }, "My
 answers.purpose = await ask({ key: "purpose", q: "In one sentence, what does it do?" }, "");
 answers.users = await ask({ key: "users", q: "Who will use it?" }, "");
 answers.never = await ask({ key: "never", q: "One thing it must NEVER do?" }, "");
-answers.stack = await ask({ key: "stack", q: "Which stack?" }, profiles.includes("generic") ? "generic" : profiles[0], profiles);
+// Prefer the neutral "generic" profile; else the first available; else fall back to
+// the string "generic" so an empty profiles/ dir never writes `profile: undefined`.
+const defaultStack = profiles.includes("generic") ? "generic" : (profiles[0] || "generic");
+answers.stack = await ask({ key: "stack", q: "Which stack?" }, defaultStack, profiles);
 answers.mode = await ask({ key: "mode", q: "How strict?" }, "vibe", ["vibe", "standard", "strict"]);
 answers.lang = await ask({ key: "lang", q: "Language for instructions?" }, "en", ["en", "vi"]);
 answers.agents = await ask({ key: "agents", q: "Which AI tools? (comma-separated; agentsmd = the open AGENTS.md standard, read by Codex / Gemini CLI)" }, "claude,cursor", KNOWN_AGENTS);

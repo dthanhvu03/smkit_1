@@ -295,7 +295,11 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
 export const GATE_EXEMPT = [
   /(^|\/)\.kit(\/|$)/, /(^|\/)\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
   /(^|\/)(dist|build|out|coverage)(\/|$)/,
-  /(^|\/)\.(claude|cursor|github|windsurf|agents)(\/|$)/,
+  // Generated agent-config dirs. Note: `.github` is intentionally NOT blanket-exempt —
+  // the kit's Copilot output there is *.md (already exempt via the markdown rule below),
+  // so leaving `.github` off the list keeps real CI files (.github/workflows/*.yml)
+  // gated instead of silently skipping the critique.
+  /(^|\/)\.(claude|cursor|windsurf|agents)(\/|$)/,
   /(^|\/)docs(\/|$)/,
   /\.(md|mdx|markdown|txt)$/i,
   /(^|\/)kit\.config\.ya?ml$/i,

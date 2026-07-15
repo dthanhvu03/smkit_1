@@ -37,12 +37,17 @@ process.stdin.on("end", async () => {
     ({ decision, reason } = critiqueGateDecision({ relPath: relPathOf(fp), mode, hasToken: tokenValid() }));
   } catch { decision = "allow"; reason = ""; } // fail open
 
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: decision,
-      ...(reason ? { permissionDecisionReason: reason } : {}),
-    },
-  }));
+  // Only assert a decision when we actually BLOCK. For allow/exempt/token/vibe we emit
+  // NO permissionDecision — deferring to the normal permission flow rather than
+  // auto-approving the write. A blanket "allow" here would suppress the user's
+  // confirmation prompt for every code edit once the gate is satisfied. A vibe-mode
+  // reminder is surfaced on stderr (shown to the user, non-blocking) without approving.
+  if (decision === "deny") {
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
+    }));
+  } else if (reason) {
+    process.stderr.write(`kit critique-gate: ${reason}\n`);
+  }
   process.exit(0);
 });

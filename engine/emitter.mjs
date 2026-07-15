@@ -53,7 +53,10 @@ export function loadDoctorStrings(kitDir, lang = "vi") {
 // unknown code still surfaces as "[CODE]" rather than vanishing, so a missing catalog
 // entry is visible/greppable instead of a blank message.
 export function fmt(strings, code, params = {}) {
-  const template = strings[code];
+  // Null-safe: a missing/absent catalog (strings == null) still degrades to "[CODE]"
+  // rather than throwing — callers that pass the default `strings=null` (e.g.
+  // listFilesRec's 2-arg form) must never crash the build on an escaping entry.
+  const template = strings && strings[code];
   if (!template) return `[${code}]`;
   // `k in params` (property EXISTENCE), not `params[k] !== undefined` (value check):
   // a param explicitly passed as `undefined` must still render as the string
