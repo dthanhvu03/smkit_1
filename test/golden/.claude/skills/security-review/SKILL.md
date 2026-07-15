@@ -1,9 +1,9 @@
 ---
 # GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
-name: "Security Review"
+name: "security-review"
 description: "Use when a change touches auth, secrets, shell/command execution, file access, or the guard/hooks. Invoke for a risk assessment with concrete exploit scenarios and fixes."
-paths:
-  - "**/*"
+license: "Proprietary"
+compatibility: "Requires repository read access and git."
 ---
 
 # Security Review skill

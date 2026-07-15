@@ -41,6 +41,15 @@
             "command": "node \"${CLAUDE_PROJECT_DIR}/.kit/hooks/consistency-guard.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.kit/hooks/critique-gate.mjs\""
+          }
+        ]
       }
     ]
   }

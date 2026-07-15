@@ -1,14 +1,12 @@
 ---
-id: release-check
-name: Release Check
+name: release-check
 description: Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict.
-paths:
-  - "**/*"
-related_roles:
-  - devops
-  - qa
-related_rules:
-  - evidence-gate
+license: Proprietary
+compatibility: Requires repository read access and git.
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: platform-team
 ---
 
 # Release Check skill

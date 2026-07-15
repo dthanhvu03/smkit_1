@@ -1,9 +1,9 @@
 ---
 # GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
-name: "Refactor"
+name: "refactor"
 description: "Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code."
-paths:
-  - "**/*"
+license: "Proprietary"
+compatibility: "Requires repository read access and git."
 ---
 
 # Refactor skill

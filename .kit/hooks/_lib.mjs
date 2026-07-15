@@ -111,6 +111,128 @@ function pathArgs(tokens) {
     !t.startsWith("-") && (/[~/]/.test(t) || /^\.?(env|ssh|aws|gnupg|git)\b/i.test(t)));
 }
 
+// ---- Guard v3: workspace-internal destruction + Windows -------------------
+// The v2 guard only blocked deletes OUTSIDE the workspace; deleting the whole
+// project from inside (`rm -rf .`, `git clean -fdx`, `git checkout -- .`) sailed
+// through. v3 classifies recursive-delete targets by where they point.
+
+// Build/cache dirs that are safe to nuke — deleting them is normal cleanup, so
+// blocking would just make the agent unable to do its job.
+const BUILD_WHITELIST = new Set([
+  "dist", "build", "out", "output", ".next", ".nuxt", ".svelte-kit", ".output",
+  "node_modules", "coverage", ".cache", ".turbo", ".parcel-cache", ".vercel",
+  "tmp", "temp", ".tmp",
+]);
+// Targets that mean "everything here" → deleting them wipes the project.
+const WHOLE_TREE = new Set([".", "./", ".\\", "*", "./*", ".\\*", "", "/", "~", "~/"]);
+
+// Classify ONE delete target: block (root/protected/outside), warn (a real subdir
+// inside the workspace), or allow (a whitelisted build dir).
+function classifyDeleteTarget(t, projDir) {
+  const raw = t.replace(/^["']|["']$/g, "");
+  if (WHOLE_TREE.has(raw)) return "block";
+  const norm = raw.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (norm === "" || norm === ".") return "block";
+  if (/(^|\/)\.git(\/|$)/.test(norm)) return "block";
+  const tier = pathTier(raw, projDir);
+  if (tier === "zeroAccess" || tier === "outsideWorkspace") return "block";
+  const base = norm.split("/").pop();
+  if (BUILD_WHITELIST.has(base)) return "allow";
+  return "warn";
+}
+
+// Worst decision across a delete command's targets (block > warn > allow).
+function worstTarget(targets, projDir, phrase) {
+  let worst = "allow", culprit = "";
+  for (const t of targets) {
+    const c = classifyDeleteTarget(t, projDir);
+    if (c === "block") return { decision: "block", reason: `${phrase} "${t}" (workspace root or protected path)` };
+    if (c === "warn" && worst === "allow") { worst = "warn"; culprit = t; }
+  }
+  return worst === "warn" ? { decision: "warn", reason: `${phrase} "${culprit}" inside the workspace` } : null;
+}
+
+const hasFlag = (tokens, re) => tokens.some((t) => re.test(t));
+
+// Supply-chain / obfuscation risks (F-06). Returns {decision, reason} where decision
+// is warn | highrisk (highrisk → block in strict, warn otherwise). curl|sh is handled
+// separately by the network→exec check.
+export function classifySupplyChain(seg, tokens, verb) {
+  const v = (verb || "").toLowerCase();
+  const sub = (tokens[1] || "").toLowerCase();
+
+  // Running an unpinned package straight from the registry.
+  const isDlx = (v === "npx") || (v === "bunx") || ((v === "pnpm" || v === "yarn") && sub === "dlx");
+  if (isDlx) {
+    const start = (v === "pnpm" || v === "yarn") ? 2 : 1;
+    const pkg = tokens.slice(start).find((t) => !t.startsWith("-"));
+    if (pkg && !pkg.includes("@"))
+      return { decision: "warn", reason: `runs an unpinned package (${v}${sub === "dlx" ? " dlx" : ""} "${pkg}") — pin a version or vet it first` };
+  }
+
+  // Installing a dependency from a remote URL or git source.
+  if ((v === "npm" || v === "pnpm" || v === "yarn" || v === "bun") &&
+      /\b(install|add|i)\b/.test(seg) && /(https?:\/\/|git\+|github:|git@)/.test(seg))
+    return { decision: "warn", reason: "installs a dependency from a remote/git source — vet it before trusting" };
+
+  // PowerShell encoded / base64 command — cannot be analysed.
+  if ((/\b(?:powershell|pwsh)\b/i.test(seg) && /(?:^|\s)-e(?:nc(?:odedcommand)?)?\b/i.test(seg)) ||
+      /FromBase64String/i.test(seg))
+    return { decision: "highrisk", reason: "PowerShell encoded/base64 command — payload cannot be inspected" };
+
+  return null;
+}
+
+// Detect a destructive command that operates INSIDE the workspace. Returns
+// {decision, reason} or null. String-level (matches the guard's tokenize model),
+// covering POSIX and Windows verbs even though the hook binds the Bash tool.
+export function classifyDestructive(seg, tokens, verb, projDir = projectDir) {
+  const v = (verb || "").toLowerCase();
+  const rest = tokens.slice(1);
+
+  if (v === "rm" && (hasFlag(tokens, /^-[a-z]*r/i) || tokens.includes("--recursive"))) {
+    const targets = rest.filter((t) => !t.startsWith("-"));
+    return worstTarget(targets.length ? targets : ["."], projDir, "recursively deletes");
+  }
+
+  if (v === "git") {
+    const sub = tokens[1];
+    if (sub === "clean" && hasFlag(tokens, /^-[a-z]*f/i) && hasFlag(tokens, /^-[a-z]*d/i))
+      return { decision: "block", reason: "git clean removes untracked files and directories" };
+    if (sub === "checkout" && tokens.includes("--")) {
+      const targets = tokens.slice(tokens.indexOf("--") + 1);
+      return worstTarget(targets.length ? targets : ["."], projDir, "git checkout discards local changes in");
+    }
+    if (sub === "restore") {
+      const targets = rest.slice(1).filter((t) => !t.startsWith("-"));
+      return worstTarget(targets.length ? targets : ["."], projDir, "git restore discards local changes in");
+    }
+  }
+
+  if (v === "find" && (/(^|\s)-delete\b/.test(seg) || /-exec\s+rm\b/.test(seg)))
+    return { decision: "block", reason: "find deletes matched files" };
+
+  if (/\bprisma\b/.test(seg) && /\bmigrate\s+reset\b/.test(seg))
+    return { decision: "block", reason: "prisma migrate reset drops and recreates the database" };
+  if (/\bartisan\b/.test(seg) && /\bmigrate:(fresh|refresh)\b/.test(seg))
+    return { decision: "block", reason: "artisan migrate:fresh/refresh drops all tables" };
+
+  // Windows destructive verbs (defense-in-depth; the hook binds Bash but these may
+  // still appear via pwsh/cmd wrappers).
+  if (v === "remove-item" || v === "ri") {
+    if (hasFlag(tokens, /^-recurse/i)) {
+      const targets = rest.filter((t) => !t.startsWith("-"));
+      return worstTarget(targets.length ? targets : ["."], projDir, "Remove-Item recursively deletes");
+    }
+  }
+  if (v === "del" || v === "erase" || v === "rmdir" || v === "rd") {
+    const targets = rest.filter((t) => !t.startsWith("-") && !/^\/[a-z]$/i.test(t));
+    return worstTarget(targets.length ? targets : ["."], projDir, `${v} deletes`);
+  }
+
+  return null;
+}
+
 // Classify a full command → {decision: block|warn|allow, reason, segment}.
 export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, projDir = projectDir } = {}) {
   const segs = splitSegments(cmd);
@@ -123,6 +245,21 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
   for (const seg of segs) {
     const tokens = tokenize(seg);
     const verb = (tokens[0] || "").split("/").pop(); // strip path prefix e.g. /bin/rm
+
+    // Guard v3: workspace-internal destruction (rm -rf ., git clean, Windows, …).
+    const destr = classifyDestructive(seg, tokens, verb, projDir);
+    if (destr?.decision === "block") return { ...destr, segment: seg };
+    if (destr?.decision === "warn") warn = warn || { ...destr, segment: seg };
+
+    // Supply-chain / obfuscation (unpinned npx, remote install, PS encoded).
+    const sc = classifySupplyChain(seg, tokens, verb);
+    if (sc?.decision === "highrisk") {
+      if (mode === "strict") return { decision: "block", reason: sc.reason + " (strict)", segment: seg };
+      warn = warn || { decision: "warn", reason: sc.reason + " — review before trusting", segment: seg };
+    } else if (sc?.decision === "warn") {
+      warn = warn || { decision: "warn", reason: sc.reason, segment: seg };
+    }
+
     const isDbExec = DB_CLIENTS.test(verb) || /(^|\s)-[ce]\s+['"]/.test(seg) || /--(?:command|execute|eval)\b/.test(seg);
 
     for (const pat of block) {
@@ -147,6 +284,55 @@ export function classifyCommand(cmd, { mode = "vibe", block = DEFAULT_BLOCK, pro
     }
   }
   return warn || { decision: "allow", reason: "", segment: "" };
+}
+
+// ---- Pre-build critique gate (trụ cột #2) ---------------------------------
+// A PreToolUse(Write|Edit) gate: in standard/strict, block the first code write of a
+// session until the change has been critiqued (a token is recorded). vibe only reminds.
+// These paths are NEVER gated — kit internals (so writing the token / brief / Decision
+// Log is never blocked), docs/notes, generated agent config, build output, config &
+// lockfiles. Everything else is treated as "code/work" worth challenging first.
+export const GATE_EXEMPT = [
+  /(^|\/)\.kit(\/|$)/, /(^|\/)\.git(\/|$)/, /(^|\/)node_modules(\/|$)/,
+  /(^|\/)(dist|build|out|coverage)(\/|$)/,
+  /(^|\/)\.(claude|cursor|github|windsurf|agents)(\/|$)/,
+  /(^|\/)docs(\/|$)/,
+  /\.(md|mdx|markdown|txt)$/i,
+  /(^|\/)kit\.config\.ya?ml$/i,
+  /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|composer\.lock)$/i,
+  /(^|\/)(\.gitignore|LICENSE|README[^/]*)$/i,
+];
+
+// Is this write path exempt from the critique gate? Empty/unknown path → exempt
+// (fail open: never block on a path we cannot read).
+export function isGateExempt(relPath) {
+  const p = String(relPath || "").replace(/\\/g, "/");
+  if (!p) return true;
+  return GATE_EXEMPT.some((re) => re.test(p));
+}
+
+// Decide the pre-build critique gate for one Write/Edit. Pure (no fs). The hook reads
+// the mode + token state and passes them in.
+//   { decision: "allow" | "deny", reason, exempt? }
+export function critiqueGateDecision({ relPath, mode = "vibe", hasToken = false } = {}) {
+  if (isGateExempt(relPath)) return { decision: "allow", reason: "", exempt: true };
+  if (hasToken) return { decision: "allow", reason: "" };
+  if (mode !== "standard" && mode !== "strict")
+    return {
+      decision: "allow",
+      reason:
+        "Pre-build reminder: have you challenged this change — correctness, security & data, " +
+        "consistency, simplicity/necessity, reversibility? Run /challenge to make it a habit.",
+    };
+  return {
+    decision: "deny",
+    reason:
+      `Pre-build critique required in ${mode} mode. Before writing code for a new task, challenge it ` +
+      "through the lenses (correctness · security & data · consistency · simplicity/necessity · " +
+      "reversibility) — run /challenge or the pre-build-critique skill — then record the verdict to " +
+      ".kit/state/gate.json (a JSON object with a non-empty \"decision\"). This runs once per session; " +
+      "edits flow after it. Docs, .kit, and config paths are never gated.",
+  };
 }
 
 // Append one JSONL decision line to .kit/audit.log (best-effort; not tamper-evident).

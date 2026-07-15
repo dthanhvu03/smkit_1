@@ -1,0 +1,693 @@
+# Roles, Rules & Skills — architecture research (2026-07-11)
+
+Research + architecture proposal. **No engine refactor in this pass.** Scope: define
+Role / Rule / Skill / Command precisely, verify against current vendor + open-standard
+docs, compare capabilities, and propose canonical contracts + catalogs for a later
+implementation task.
+
+Verification labels used throughout: **verified** (fetched from an official source on
+2026-07-11), **partial** (training knowledge to Jan 2026, not re-fetched today, or
+source existence confirmed but details not read), **CHƯA XÁC MINH** (not confirmable).
+
+---
+
+## 1. Executive summary
+
+- The current split into `roles / rules / skills / commands` is **conceptually correct
+  and matches where the ecosystem landed** — but two things have drifted from the live
+  standards and should be corrected in a later pass:
+  1. **The kit's `SKILL.md` schema is non-standard.** It uses `id`, `paths`,
+     `related_roles`, `related_rules`. The **Agent Skills open standard** (agentskills.io,
+     originally Anthropic, now adopted by Claude Code, Codex, Gemini CLI, Cursor, Copilot/
+     VS Code, Goose, Roo, Factory, Kiro… — *verified 2026-07-11*) defines skills by
+     `name` + `description` (+ optional `license`, `allowed-tools`, `metadata`) and a
+     folder that may bundle `scripts/ references/ assets/`. Skills are activated by
+     **description-based model decision + manual `/name`**, *not* by `paths`. Path
+     activation is a **Rule** concept. The kit conflates the two.
+  2. **Command and Skill have converged in Claude Code.** *Verified 2026-07-11:*
+     "Custom commands have been merged into skills… `.claude/commands/deploy.md` and
+     `.claude/skills/deploy/SKILL.md` both create `/deploy`… if a skill and a command
+     share the same name, the skill takes precedence." A Command is still a distinct
+     *authoring intent* (manual entrypoint), but on Claude it is a skill with
+     `disable-model-invocation: true`.
+- **Biggest gap:** the kit does not separate the **portable Skill specification** from
+  **kit governance metadata**. Today `SKILL.md` carries non-standard fields (`id`, `paths`,
+  `related_roles`, `related_rules`); and the naive fix — cramming a rich governance object
+  under `metadata:` — would itself violate the spec, because Agent Skills defines
+  `metadata` as a **string→string map** (*verified 2026-07-11*, agentskills.io/
+  specification). The correct model is a **portable `SKILL.md` + a kit-owned sidecar
+  manifest** (`skill.kit.yaml`) that holds trust/provenance/permission/target data and is
+  validated strictly. Secondarily, the kit still does not *declare* which enforcement layer
+  applies per target, nor warn when a capability is dropped.
+- **VERIFIED (2026-07-11): Claude Code has native path-scoped rules** at
+  `.claude/rules/**/*.md` via `paths:` frontmatter (no `paths` → global; with `paths` →
+  loads only when Claude touches a matching file; guidance, not hard enforcement). The
+  earlier "CHƯA XÁC MINH" on this is resolved — **not a blocker.**
+- **Folder structure: keep all four.** `roles/ rules/ skills/ commands/` map cleanly onto
+  the four abstractions. The fix is **schema alignment + capability metadata + doctor
+  checks**, not moving files.
+
+## 2. Terminology (verified definitions)
+
+| Abstraction | Answers | Primary activation | Enforcement reality |
+|---|---|---|---|
+| **Role** (subagent/persona) | *Who does the work?* | model-decision (by `description`) or explicit call | Claude: own context + tool set + permissions (subagent). Elsewhere: mostly none. |
+| **Rule** (instruction/policy) | *How must the agent behave?* | always-on / path-glob / model-decision / manual | Guidance unless backed by hook/CI/permission/sandbox. |
+| **Skill** (capability package) | *What procedure + resources does it use?* | description model-decision + manual `/name` | Guidance + optional bundled scripts; progressive disclosure. |
+| **Command** (entrypoint) | *How does a human start a task?* | manual `/name` | On Claude = a skill with `disable-model-invocation: true`. |
+
+These four are **distinct** and should stay distinct (ADR-004), even though Claude Code
+unifies Command+Skill at the file level.
+
+## 3. Role analysis
+
+**Current kit state (inventory 2026-07-11):** 7 roles in `engine/roles/*.md`, one file
+each, frontmatter = `{name, description(trigger-style), tools(allowlist), model}`. Bodies
+are prose. Emitted only to Claude `.claude/agents/<name>.md`; for cursor/copilot/windsurf/
+agentsmd roles appear **only as an index in AGENTS.md** (no real subagent). Models used:
+architect/reviewer=opus, implementer/planner/qa=sonnet, devops=haiku, orchestrator=inherit.
+
+**Verified vendor reality:**
+- **Claude Code subagents** (*verified 2026-07-11*, code.claude.com/docs/en/sub-agents):
+  "each subagent runs in its own context window with a custom system prompt, specific tool
+  access, and independent permissions"; Claude auto-delegates by `description`. Fields:
+  `name`, `description`, `tools`, `model` (+ others such as skill preload via
+  `disable-model-invocation` interplay; full field list *partial*). Background agents and
+  agent teams are separate features. **Tool list on a subagent is a real access boundary
+  for that subagent** (independent permissions), unlike the top-level `allowed-tools`
+  pre-approval semantics.
+- **Codex / Copilot / Cursor / Windsurf / Gemini "roles":** subagent/custom-agent support
+  varies and is **partial / CHƯA XÁC MINH** for exact schema. Copilot has "custom agents";
+  Cursor custom agents/modes exist; none are confirmed to accept the Claude field set.
+  Treat Role as **Claude-first, degrade to an AGENTS.md index elsewhere** (current kit
+  behavior is actually reasonable).
+
+**Answers to §4.A** — updated after fetching the full subagent frontmatter table
+(*code.claude.com/docs/en/sub-agents, verified 2026-07-11*: `name`, `description`,
+`tools`, `disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`,
+`mcpServers`, `hooks`, `memory`, `background`, `effort`, `isolation`, `color`,
+`initialPrompt` — only `name`/`description` required). Most items below moved from
+CHƯA XÁC MINH to **verified**; the kit now implements the ones matching ADR-004's Role
+contract (§12 canonical schema, `engine/emitter.mjs`'s `roleEffective`/
+`validateRoleGovernance`):
+1. Own context — **Claude: yes** (verified, own context window). Others: shared / CHƯA
+   XÁC MINH.
+2. Own model — **Claude: yes** (`model:`, incl. `inherit`, resolution order documented).
+   **Implemented** (legacy flat `model:` or `runtime.model`).
+3. Limit tools — **Claude: yes** (`tools:`, verified). **Implemented**
+   (`permissions.allowTools`). 4. Allowlist = restriction? — **yes, real**: omitted
+   inherits all tools; a subagent's own `tools`/`disallowedTools` are a genuine access
+   boundary for that subagent (distinct from a Skill's `allowed-tools` pre-approval).
+   **Implemented**: `disallowedTools` from `permissions.denyTools` (**verified field,
+   newly implemented** — was previously dropped).
+5. Permission mode — **verified**: `permissionMode` (`default|acceptEdits|auto|dontAsk|
+   bypassPermissions|plan|manual`). **Implemented** (`permissions.mode`, validated against
+   the enum). 6. Memory — **verified**: `memory: user|project|local` ("persistent memory
+   scope… enables cross-session learning"). **Implemented** (`memory.scope`).
+7. Isolation — **verified**: `isolation: worktree` — a temporary git worktree, isolated
+   copy of the repo, auto-cleaned if unchanged. **Implemented** (`runtime.isolation`).
+8. Preload skills — **verified**: `skills:` field injects full skill content at startup;
+   **cannot target a `disable-model-invocation: true` skill** (Claude silently skips it,
+   logs to debug only). **Implemented** (`skills.preload`), and the kit turns Claude's
+   silent skip into a **build-time error** (`ROLE_SKILL_PRELOAD_MANUAL_ONLY_CONFLICT`) —
+   the one place the kit is stricter than the vendor by design.
+9. Self-select vs called — **both** (auto-delegate by description OR explicit `Task`
+   call, verified).
+10. Nested subagents — a subagent can still invoke skills via the `Skill` tool, but
+    subagent-calls-subagent nesting is **CHƯA XÁC MINH**.
+11. Max turns — **verified**: `maxTurns` ("maximum number of agentic turns before the
+    subagent stops"). **Implemented** (`runtime.maxTurns`, validated as a positive
+    integer).
+12. Output contract — **no vendor field**; **kit-owned only** (`output.
+    requiredSections`), validated against the role body's own Markdown headers, never
+    emitted to any target.
+13. Lifecycle hooks — **verified**: subagent frontmatter supports a `hooks:` field
+    (scoped to that subagent's lifecycle) — not yet wired into the kit's canonical
+    schema (future work).
+14. Portable across vendors — **No** (Role remains the least portable abstraction — every
+    verified field above is Claude-specific; other targets get only the AGENTS.md index).
+15. Dropped on emit — **as of this implementation, nothing verified is dropped for
+    Claude**: all ten verified fields above (tools, disallowedTools, model,
+    permissionMode, maxTurns, skills, isolation, background, effort, memory) are now
+    emitted when declared. `mcpServers`/`hooks`/`color`/`initialPrompt` are verified but
+    not yet modeled in the canonical schema (documented gap, not a silent drop — they
+    were simply never part of the ADR-004 proposal). On non-Claude targets the whole
+    subagent concept still degrades to an AGENTS.md bullet (name + description only).
+
+## 4. Rule analysis
+
+**Current kit state:** `engine/rules/` (hard-rules always/agent-read, consistency-guard
+paths/hook+agent-read, evidence-gate always/gate) + `profiles/*/rules/conventions.md`.
+Frontmatter = `{id, scope(always|paths), enforce, paths, title}`. `enforce` vocabulary in
+use: `agent-read`, `hook`, `gate`, `generator`. Emitted per target with correct scoping:
+Claude `.claude/rules/*.md` (`paths:`), Cursor `.mdc` (`globs`+`alwaysApply`), Copilot
+`.github/instructions/*.instructions.md` (`applyTo`), Windsurf `.windsurf/rules/*.md`
+(`trigger: glob|always_on`), AGENTS.md (always-on rules inlined).
+
+**Verified/known vendor reality:**
+- **Cursor rules** (partial, training Jan 2026; skills confirmed 2026-07-11 but rules page
+  not re-read): `.cursor/rules/*.mdc` with `description`, `globs`, `alwaysApply`; project
+  vs user rules. Activation: always / glob / (agent-requested) / manual.
+- **Windsurf rules** (partial): `.windsurf/rules/` with activation modes **`always_on`,
+  `manual`, `model_decision`, `glob`**; plus workflows and memories. This is the richest
+  native activation model and the kit only uses `glob`/`always_on`.
+- **Copilot** (partial): repo-wide `.github/copilot-instructions.md` + path-scoped
+  `.github/instructions/*.instructions.md` (`applyTo`) + prompt files. No `model_decision`.
+- **Claude `.claude/rules/` with `paths:`** — **CHƯA XÁC MINH** as a *native* auto-load
+  mechanism in current docs. Claude's documented memory mechanism is `CLAUDE.md` (+ imports)
+  and skills; whether `.claude/rules/*.md` is natively loaded path-scoped needs
+  confirmation. **This is the single most important verification gap** because the kit's
+  README claims "Claude's native path-scoped `.claude/rules/`". Flag for live check.
+- **AGENTS.md** (*verified 2026-07-11*): plain markdown, **no schema**, nested files
+  (closest wins, chat overrides). It is guidance only — never enforcement.
+
+**Answers to §4.B (abridged):** loaded = per activation mode; always-on lives in context
+every turn (token cost); path/glob supported by Cursor/Copilot/Windsurf/Claude(?);
+model-decision supported by Windsurf (`model_decision`) and Cursor(agent-requested),
+partial elsewhere; precedence + conflict = **no vendor guarantees a deterministic
+cross-rule conflict resolution** → the kit must own precedence at generation time (it now
+fails on invariant id conflict — extend to rules). Hard enforcement = **never** from a
+rule file alone. Verifying a rule actually loaded = not possible at runtime → argues for
+`doctor` static checks. Import/symlink handling = vendor-specific / CHƯA XÁC MINH.
+
+**Enforcement vocabulary to standardize:** `guidance | static-check | hook | ci |
+permission | sandbox | unsupported`. The kit's current `enforce` values (`agent-read`,
+`hook`, `gate`, `generator`) should map onto this (`agent-read`→`guidance`,
+`gate`→`ci`/`static-check`, `hook`→`hook`, `generator`→`static-check`).
+
+## 5. Skill analysis
+
+**Current kit state:** 6 skills in `engine/skills/<id>/SKILL.md`, **SKILL.md only** (no
+`scripts/ references/ assets/`). Frontmatter = `{id, name, description, paths,
+related_roles, related_rules}`. Emitted to Claude `.claude/skills/<id>/SKILL.md` (with
+`name`, `description`, `paths`, `user-invocable`) and to Cursor as **commands**
+(`.cursor/commands/<id>.md`).
+
+**Verified Agent Skills open standard** (*agentskills.io, 2026-07-11*):
+- A skill = folder with `SKILL.md` (metadata `name` + `description` minimum) + optional
+  `scripts/ references/ assets/`.
+- **3-stage progressive disclosure:** discovery (name+description only) → activation (full
+  SKILL.md) → execution (bundled code/refs on demand).
+- Portable across a large client set (Claude Code, Codex, Gemini CLI, Cursor, Copilot/
+  VS Code, Goose, OpenCode, Roo, Factory, Kiro, Amp, …). Spec: agentskills.io/specification.
+
+**Verified Agent Skills open-spec constraints** (*agentskills.io/specification,
+2026-07-11*): `name` **required**, ≤64 chars, lowercase alnum+hyphen, no leading/trailing/
+double hyphen, **must equal the parent directory**. `description` **required, non-empty,
+≤1024 characters** (a spec violation, not a Claude-only concern). `metadata` is a
+string→string map. `allowed-tools` is space-separated and **experimental** ("support may
+vary between agent implementations"). `compatibility` ≤500 chars.
+
+**Verified Claude Code skill frontmatter** (*code.claude.com/docs/en/skills, 2026-07-11*):
+`name` (optional; display — defaults to directory), `description`, `when_to_use`
+(**the combined `description`+`when_to_use` text is truncated at 1,536 characters in
+Claude's skill listing** — a Claude UX/token-budget concern, layered ON TOP of the spec's
+1024-char `description` limit, not a replacement for it), `disable-model-invocation`
+(bool — manual-only; also blocks subagent preload & scheduled-task use),
+`user-invocable` (bool — hide from `/` menu), `allowed-tools` (no-ask tools while active,
+does NOT remove other tools from the pool), `disallowed-tools` (removed from pool while
+active), `effort` (low..max), and **`paths`** — glob patterns that gate automatic
+activation to matching files, "same format as path-specific rules" (a verified **Claude
+vendor extension**, NOT part of the open standard). Discovery levels: personal
+`~/.claude/skills/`, project `.claude/skills/`, plugin `<plugin>/skills/`; precedence
+**enterprise > personal > project**, skill overrides bundled, plugin namespaced; nested
+monorepo skills load on demand; symlinks followed (loaded once).
+
+**Key divergences (kit → standard):**
+| Kit field | Standard? | Verdict |
+|---|---|---|
+| `id` | no | drop; the **directory name** is the identity/command name |
+| `name` | yes | keep (display); must equal directory, ≤64 chars, lowercase-hyphen |
+| `description` | yes | keep; **≤1024 chars is a spec ERROR**, not just a style nit |
+| `paths` | **not open-standard**, but a **verified Claude vendor extension** | keep OUT of portable `SKILL.md`; supported only via a Claude-only overlay in `skill.kit.yaml` (`activation.claude.paths`), re-added by the Claude emitter — never a Rule substitute on other targets, never silently dropped when declared |
+| `related_roles` / `related_rules` | no | move to `skill.kit.yaml` sidecar (kit-owned), non-standard |
+| — | `allowed-tools` | **add** (portable capability declaration; pre-approval hint, not a deny boundary) |
+| — | `skill.kit.yaml` (trust tier, provenance/hash, permissions) | **add** — kept OUT of `SKILL.md`'s `metadata:`, which the spec restricts to string→string |
+
+**Answers to §4.C (abridged, verified where marked):** standard fields = name+description
+(*verified*, with hard length/format constraints — not just recommendations). Vendor
+extensions = Claude's `disable-model-invocation/user-invocable/allowed-tools/
+disallowed-tools/effort/when_to_use/paths` (*verified*). Metadata always loaded =
+name+description (*verified*). Full body on activation; resources on execution
+(*verified*). Scripts are **read or executed depending on the agent + tool permissions**
+— executing bundled scripts is a real trust boundary, which is why the kit's governance
+sidecar requires a verified content hash before a high-risk skill may run any script.
+Implicit invocation = yes (model-decision) unless `disable-model-invocation`; manual =
+`/name`. Tool dependency declared via `allowed-tools`; network/consent/trust/provenance =
+**not in the base standard** → kit-owned `skill.kit.yaml` fields. `.agents/skills/` = an
+emerging cross-tool discovery path (Codex/Gemini) — **partial**. Name clash handling =
+per §5 verified precedence (Claude). Registry/plugin distribution = Claude plugins +
+marketplaces; validation tooling = the `skills-ref` reference library (agentskills.io/
+specification → github.com/agentskills/agentskills) — **verified to exist**, not run by
+this kit yet. Size limits = description **≤1024 (spec, hard)**; Claude listing
+(description+when_to_use) **≤1536 (Claude UX, soft)**; body ≤500 lines recommended
+(*verified*, soft).
+
+## 6. Command / workflow distinction
+
+- **Command** = manual entrypoint (a human types `/name`). Kit `engine/commands/`:
+  checkup, decide, review, start.
+- *Verified 2026-07-11:* on Claude Code, commands and skills are the **same mechanism**;
+  a command is authored intent for *manual* use → equivalent to a skill with
+  `disable-model-invocation: true`. Cursor has `.cursor/commands/`. Windsurf has
+  **workflows** (`.windsurf/workflows/`) which are closer to commands than to rules.
+- **Recommendation:** keep `engine/commands/` as authored *manual entrypoints*, but model
+  them as "skills with manual-only invocation" so the Claude emitter can converge them and
+  other targets can map them to native commands/workflows. Do **not** merge Command into
+  Skill in the *source tree* (different authoring intent and different default invocation),
+  but document that they share Claude's runtime.
+
+## 7. Cross-vendor capability matrix
+
+Values: `SUPPORTED` · `PARTIAL` · `UNSUPPORTED` · `VENDOR-SPECIFIC` · `KIT-OWNED` ·
+`CHƯA XÁC MINH`. Sources per block below the table.
+
+### Role capabilities
+| Capability | Claude | Codex | Copilot | Windsurf/Devin | Cursor | Gemini CLI | Kit canonical |
+|---|---|---|---|---|---|---|---|
+| Separate context | SUPPORTED (verified) | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED (emit) |
+| Custom prompt | SUPPORTED | PARTIAL | PARTIAL | PARTIAL | PARTIAL | PARTIAL | SUPPORTED |
+| Custom model | SUPPORTED (`model`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED |
+| Tool allowlist (restriction) | SUPPORTED (`tools`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED (Claude only) |
+| Tool denylist | SUPPORTED (`disallowedTools`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Permission mode | SUPPORTED (`permissionMode`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Worktree isolation | SUPPORTED (`isolation: worktree`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | VENDOR-SPECIFIC | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Parallel/background | SUPPORTED (`background`, verified) | PARTIAL | PARTIAL | VENDOR-SPECIFIC | PARTIAL | CHƯA XÁC MINH | IMPLEMENTED |
+| Max turns | SUPPORTED (`maxTurns`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Effort | SUPPORTED (`effort`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Persistent memory | SUPPORTED (`memory: user\|project\|local`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED |
+| Skill preload | SUPPORTED (`skills`, verified; cannot target `disable-model-invocation`) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | IMPLEMENTED, + build-time reject of the manual-only conflict |
+| Output schema | UNSUPPORTED (prose) | — | — | — | — | — | KIT-OWNED (contract, validated, never emitted) |
+| Lifecycle hooks | SUPPORTED (`hooks`, verified) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | not yet modeled (future work) |
+
+### Rule capabilities
+| Capability | Claude | Codex | Copilot | Windsurf/Devin | Cursor | Gemini CLI | Kit canonical |
+|---|---|---|---|---|---|---|---|
+| Always-on | SUPPORTED (CLAUDE.md) | SUPPORTED (AGENTS.md) | SUPPORTED | SUPPORTED (`always_on`) | SUPPORTED (`alwaysApply`) | SUPPORTED (GEMINI.md) | SUPPORTED |
+| Path/glob scoped | SUPPORTED (`.claude/rules/` `paths:`, verified) | UNSUPPORTED | SUPPORTED (`applyTo`) | SUPPORTED (`glob`) | SUPPORTED (`globs`) | CHƯA XÁC MINH | KIT-OWNED (emit) |
+| Model-decision | PARTIAL | CHƯA XÁC MINH | UNSUPPORTED | SUPPORTED (`model_decision`) | PARTIAL | CHƯA XÁC MINH | KIT-OWNED |
+| Manual trigger | SUPPORTED | UNSUPPORTED | PARTIAL (prompt files) | SUPPORTED (`manual`) | SUPPORTED | PARTIAL | KIT-OWNED |
+| Org/user/project/local scope | PARTIAL | PARTIAL | PARTIAL | PARTIAL | SUPPORTED (user/project) | PARTIAL | KIT-OWNED |
+| Precedence guarantee | CHƯA XÁC MINH | AGENTS.md nesting | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | **KIT-OWNED (must)** |
+| Conflict handling | CHƯA XÁC MINH | closest-wins | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | **KIT-OWNED (fail)** |
+| Hard enforcement | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED | via hook/CI only |
+
+### Skill capabilities
+| Capability | Claude | Codex | Copilot | Windsurf/Devin | Cursor | Gemini CLI | Kit canonical |
+|---|---|---|---|---|---|---|---|
+| SKILL.md open standard | SUPPORTED | SUPPORTED | SUPPORTED | PARTIAL | SUPPORTED | SUPPORTED | **should adopt** |
+| `.agents/skills/` | PARTIAL | PARTIAL | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | PARTIAL | UNSUPPORTED (today) |
+| Implicit invocation | SUPPORTED | SUPPORTED | SUPPORTED | PARTIAL | SUPPORTED | SUPPORTED | KIT-OWNED |
+| Manual invocation | SUPPORTED (`/name`) | PARTIAL | PARTIAL | PARTIAL | SUPPORTED | PARTIAL | SUPPORTED |
+| Progressive disclosure | SUPPORTED | SUPPORTED | SUPPORTED | PARTIAL | SUPPORTED | SUPPORTED | (single-file today) |
+| Scripts / references / assets | SUPPORTED | SUPPORTED | SUPPORTED | PARTIAL | SUPPORTED | SUPPORTED | UNSUPPORTED (SKILL.md only) |
+| `allowed-tools` declaration | SUPPORTED | PARTIAL | PARTIAL | CHƯA XÁC MINH | PARTIAL | PARTIAL | **should add** |
+| Consent / provenance / version | VENDOR/PARTIAL | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | **KIT-OWNED** |
+| Plugin distribution | SUPPORTED (marketplaces) | PARTIAL | PARTIAL | CHƯA XÁC MINH | PARTIAL | PARTIAL | UNSUPPORTED |
+| Disable/enable | SUPPORTED (`disableBundledSkills`, overrides) | PARTIAL | PARTIAL | CHƯA XÁC MINH | PARTIAL | PARTIAL | KIT-OWNED |
+| Validation / security scan | PARTIAL (spec) | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | CHƯA XÁC MINH | **KIT-OWNED (doctor)** |
+
+**Source notes:** Claude Code skills/subagents + "commands merged into skills" + precedence
++ the 1,536-char Claude listing cap + the verified `paths` vendor extension = **verified**
+(code.claude.com/docs/en/skills, /sub-agents, 2026-07-11). The 1,024-char `description`
+spec limit + `name` format rules + string→string `metadata` = **verified**
+(agentskills.io/specification, 2026-07-11).
+Agent Skills standard + client list (Codex/Gemini/Cursor/Copilot/VS Code support) =
+**verified** (agentskills.io, 2026-07-11). AGENTS.md = **verified** (agents.md, 2026-07-11).
+Cursor `.mdc` rules, Windsurf activation modes, Copilot `applyTo`, Gemini GEMINI.md =
+**partial** (training Jan 2026; skills support confirmed via agentskills.io client URLs but
+rule/subagent pages not re-read today). Everything marked CHƯA XÁC MINH needs a live check.
+
+## 8. Discovery, activation & precedence
+
+- **Rules** — activation is declared: `always | path | glob | model-decision | manual`.
+  The kit must OWN precedence (vendors don't guarantee it). Proposed rule precedence
+  (higher wins): `local > project > profile > engine`, and within a layer, explicit
+  `priority` then id; **unresolved same-priority conflict = fail** (mirror the invariant
+  conflict rule already shipped).
+- **Skills** — discovery = name+description in context; activation = model-decision on
+  description OR manual `/name`; execution loads bundled resources. Precedence on name
+  clash (Claude, verified): enterprise > personal > project > bundled; kit source has one
+  layer today.
+- **Roles** — selected by model on `description`, or explicitly. The kit should keep
+  descriptions trigger-shaped ("Use when…", "Not for…") — it already does.
+
+## 9. Context & token model (progressive-disclosure budget)
+
+| Layer | Load timing | Target budget |
+|---|---|---|
+| Role descriptions (catalog) | always (delegation menu) | ≤ ~1 line each, ≤ ~1.5 KB total |
+| Rule metadata | always for always-on; else on activation | always-on rules **< 200 lines total** (kit design doc target) |
+| Skill catalog (name+desc) | always | description ≤1024 chars (spec, hard); combined description+when_to_use ≤1536 chars (Claude listing, soft) |
+| Full role prompt | on delegation | unbounded but focused |
+| Full rule body | on activation (path/glob) | keep scoped bodies small |
+| Full SKILL.md | on activation | soft cap; move detail to `references/` |
+| references/ scripts output | on execution | on demand only |
+
+The kit currently makes **3 of 4 engine rules always-on** and marks skills with
+`paths: **/*` (which does nothing useful for skills). Aligning skills to
+description-activation and keeping only truly-global rules always-on is the main
+token win. **Do not claim token savings without measurement** (no measurement tool exists).
+
+## 10. Permission & security model
+
+- **`allowed-tools` is a vendor-dependent pre-approval hint, NOT a uniform deny boundary.**
+  *Verified 2026-07-11:* on Claude a skill's `allowed-tools` lets those tools run without
+  asking but does **not** remove other tools (`disallowed-tools` + permission settings +
+  hooks + sandbox are the real deny layers); GitHub Copilot uses it to skip confirmation
+  and explicitly warns that pre-approving `shell`/`bash` lets a malicious skill run
+  arbitrary commands. So tool boundaries are **target-dependent**: split
+  `requestedTools` / `deniedTools` / `preApprovedTools`; an adapter emits `allowed-tools`
+  only from `preApprovedTools`, emits real deny where supported, warns where unsupported,
+  and **never auto-promotes `requestedTools` to `allowed-tools` nor pre-approves a
+  dangerous tool just because a skill asks.**
+- Proposed **effective-permission precedence** (higher wins, restrictive):
+  `hard deny > sandbox restriction > managed policy > role deny > skill requested >
+  project rule > profile rule > engine default`. A skill may **never** widen beyond its
+  Role or policy.
+
+## 11. Supply-chain risks (skills especially)
+
+Skills are executable, model-selected, and shareable → the highest-risk abstraction.
+
+| Risk | Vector | Mitigation the kit can own |
+|---|---|---|
+| Description poisoning / skill-selection manipulation | crafted `description` pulls the model into a malicious skill | doctor lint: over-broad/over-long descriptions; trust tier gate on implicit invocation |
+| Hidden instructions | body text steering the agent | provenance + review status metadata; diff on update |
+| Malicious scripts / remote download | `scripts/`, `curl|sh` inside a skill | guard v3 already blocks `curl|sh`; mark `network`/`executable` in metadata; T-tier gates |
+| Permission escalation | skill requests tools the role denied | precedence (§10): role/policy deny wins |
+| Path traversal / symlink escape | `references/` outside project | ownership-manifest + realpath boundary (already built for generation; extend to skill assets) |
+| Update drift / tampered local copy | copied skill diverges from upstream | `content hash` + `source URL` in metadata; doctor drift for skill assets |
+| Unsigned / untracked third-party | no provenance | trust tier + signature/hash requirement |
+
+**Proposed trust tiers** (each gates implicit-invocation / script-exec / network / MCP /
+shell / file-access / approval / signature / audit):
+```
+T0 bundled+reviewed     implicit ok, scripts ok (reviewed), audit
+T1 org-managed          implicit ok, scripts w/ approval, signed
+T2 project-owned+review  implicit ok, scripts w/ approval
+T3 third-party pinned    manual-only, scripts require approval + hash pin
+T4 untrusted/local       manual-only, no scripts, no network, explicit approval each use
+```
+
+## 12. Canonical schemas (proposed — not implemented)
+
+### Role
+```yaml
+id: security-reviewer
+description: "Use when a change touches auth, secrets, shell/exec, or file access. Not for style review."
+scope: project
+delegation: { mode: model-decision, triggers: [security review, authentication, secrets] }
+runtime: { model: inherit, effort: high, maxTurns: 20, background: false, isolation: none }
+permissions:
+  mode: read-only
+  allowTools: [read, search]        # portable INTENT; real restriction only where target supports it
+  denyTools: [write, shell, network]
+skills: { preload: [security-audit], allow: [dependency-review] }
+memory: { scope: none }
+output: { format: markdown, requiredSections: [findings, severity, evidence, recommendations] }
+targets: { supported: [claude], degrade: { others: "emit as AGENTS.md role index; warn tools/permissions dropped" } }
+```
+Portable: `id/description/delegation/output`. Claude-mostly: `permissions/isolation/model/
+skills.preload/maxTurns`. Kit-enforced-only: `output.requiredSections` (via evidence gate).
+Emitter MUST warn when `permissions`/`isolation`/`skills.preload` are dropped for a target.
+
+### Rule
+```yaml
+id: domain-service-boundary
+description: Domain logic must go through domain services
+scope: { level: project }
+activation: { mode: path, paths: ["src/domain/**"] }
+priority: 300
+enforcement: { type: guidance, severity: required }   # guidance|static-check|hook|ci|permission|sandbox|unsupported
+conflicts: { strategy: fail, with: [] }
+lifecycle: { owner: architecture-team, status: active }
+```
+`enforcement.type` MUST be one of the seven values; Markdown never self-declares hard
+enforcement. Doctor cross-checks that `hook`/`ci` types have a real hook/CI backing (the
+kit already does this for `enforce=hook`).
+
+### Skill — TWO LAYERS (portable SKILL.md + kit sidecar)
+
+**`SKILL.md`** — strict Agent Skills open standard. `name` = directory name; `metadata`
+is **string→string only** (no nested objects/arrays/bool):
+```yaml
+---
+name: security-audit
+description: "Audits authentication, authorization, secrets, injection, unsafe commands, filesystem access, and dependency risks. Use for security-sensitive changes and formal security reviews."
+license: Proprietary
+compatibility: Requires repository read access and git.
+metadata:
+  sixmen-version: "1.0.0"
+  sixmen-trust-tier: "T0"
+  sixmen-owner: "platform-team"
+---
+```
+
+**`skill.kit.yaml`** — kit-owned governance sidecar, its own `schemaVersion`, strictly
+validated, **never emitted into SKILL.md**:
+```yaml
+schemaVersion: 1
+id: security-audit
+owner: platform-team
+version: 1.0.0
+trustTier: T0
+provenance: { sourceUrl: null, sourceRef: bundled, contentHash: auto, reviewStatus: approved }
+invocation: { implicit: true, manual: true }
+permissions:
+  requestedTools: [read, search]
+  deniedTools: [write, shell, network]
+  preApprovedTools: []           # only these may become `allowed-tools`; never auto-promote requestedTools
+execution: { network: false, executableScripts: false }
+targets: { supported: [claude, cursor, copilot, windsurf] }
+```
+Folder: `engine/skills/security-audit/{SKILL.md, skill.kit.yaml, scripts/, references/,
+assets/, tests/}`. `tests/` is not emitted to any target. Skills are activated by
+`name`+`description` (model) and manual `/name` — **never by `paths`** (that is a Rule;
+model a path-gated skill as a Rule that *recommends* the skill).
+
+### Command
+```yaml
+id: start
+title: Start or continue a task
+description: "Begin or resume work; read memory, plan the smallest next step, build per mode."
+argument-hint: "[what you want to build]"
+invocation: manual            # Claude: emit as skill w/ disable-model-invocation: true
+```
+
+## 13. Composition model
+
+```
+Command (manual)  ── selects/requests ──▶  Role
+Role  ── preloads/invokes ──▶  Skills
+Rules  ── apply to ──▶  Role AND Skills (by activation/scope)
+Hooks / Policy / Sandbox  ── hard-enforce ──▶  everything
+```
+Case answers: (1) role preloads many skills = OK (Claude preload). (2) many roles share a
+skill = OK (skills are standalone). (3) skill invoked without a role = OK (top-level).
+(4) rule applies to role not skill = allowed via `scope`/`activation`. (5) skill requests a
+tool the role denied → **role deny wins** (§10). (6) two skills request different tools →
+union, still bounded by role/policy. (7) role in worktree, skill references outside →
+**boundary check must reject** (realpath). (8) path-rule in subagent context → rule applies
+if the subagent touches matching paths (target-dependent; CHƯA XÁC MINH on Claude). (9)
+implicit skill but project policy forbids → policy wins (mark `implicitInvocation:false` or
+tier gate). (10) target lacks a canonical field → **emitter warns, never silent drop**.
+
+## 14. Mapping into the current repository
+
+1. **Keep the four folders** (`roles/ rules/ skills/ commands/`). Correct separation.
+2. **Role = folder or file?** Keep **file-per-role** now; move to folder only if roles gain
+   bundled assets (output templates). Not needed yet.
+3. **Rule = frontmatter Markdown** — keep; add `activation`+`enforcement.type` fields
+   (superset of current `scope`/`enforce`).
+4. **Skill → adopt Agent Skills standard** (rename fields, drop `paths`/`id`, move
+   `related_*` under `metadata`, allow `scripts/references/assets`). Biggest change.
+5. **Profiles** override by ID with the same conflict-fail rule already shipped for
+   invariants; profiles may add roles/rules/skills or override by id (explicit `override`).
+6. **Registry?** The `engine/targets/*/capabilities.json` (already added) is the registry;
+   add a per-abstraction capability map so the emitter/doctor can warn on drop.
+7. **Per-abstraction schemaVersion** — yes, add `schemaVersion` to role/rule/skill
+   frontmatter for migration safety.
+8. **Ownership manifest for supporting files** — extend the existing build manifest to
+   track skill `scripts/references/assets` so drift/cleanup covers them.
+9. **Emitter degrade** — warn (not silent) when a target lacks a declared capability.
+10. **Doctor** — new checks in §16.
+
+## 15. Anti-patterns to reject
+
+- Roles that plan + implement + review + approve their own work ("senior-developer").
+- Two roles/skills with different names, same responsibility.
+- A role whose `tools` exceed its job (e.g. reviewer with Write/Bash).
+- `paths:` in the PORTABLE `SKILL.md` (category error — that's a Rule concept, or at most
+  a Claude-only overlay field in `skill.kit.yaml`, never a top-level SKILL.md key).
+- Skill `description` that is long/vague → poisons skill selection and wastes context.
+- Rule Markdown claiming to be "enforced"/"blocking" without a hook/CI backing.
+- Command duplicated as a separate Skill with the same name on Claude (they collide).
+- Copying a third-party skill without provenance/hash (untracked supply chain).
+- A high-risk-tier (T3/T4) skill that still auto-invokes or has no verified content hash
+  (implemented: `validateSkillGovernance` rejects this before generation).
+
+## 16. Doctor & validation requirements (implemented where noted, else proposed)
+
+- skill `description` >1024 chars → **ERROR** (spec violation) *(implemented)*.
+- skill description+when_to_use >1536 chars → **WARNING** (Claude listing truncation)
+  *(implemented)*.
+- skill/name not matching Agent Skills' lowercase-hyphen format or directory name
+  *(implemented)*.
+- weak trigger cue in description/when_to_use, multilingual heuristic → WARNING
+  *(implemented)*.
+- T3/T4 skill not manual-only, missing/malformed/mismatched content hash → **ERROR**
+  *(implemented — format, algorithm/length, and actual-content verification, not just
+  field presence)*.
+- self-contradictory permissions (pre-approved+denied, pre-approved+unrequested) → ERROR
+  *(implemented)*.
+- manual-only invocation or Claude-only path-gated activation declared for a target with
+  unconfirmed support → WARNING, never silent *(implemented)*.
+- overlapping skill triggers (two skills match the same description space).
+- role description missing delegation cue ("Use when…").
+- always-on rule body too long (> N lines).
+- SKILL.md over recommended size; reference chain too deep.
+- duplicate ids / duplicate display names across layers.
+- rule/role conflict without resolution → fail.
+- tool request incompatible with target (`allowed-tools` a target ignores) → warn.
+- unsupported field about to be silently dropped by an emitter → warn.
+- skill `enforcement`/trust-tier vs requested `network`/`executableScripts` mismatch.
+- skill provenance: missing `contentHash`/`sourceUrl` for T3/T4.
+
+## 17. Test strategy (proposed)
+
+- **Schema tests:** every role/rule/skill validates against its canonical schema; bad
+  `enforcement.type` / trust tier fails.
+- **Emitter contract tests:** per target, assert dropped-capability warnings fire;
+  deterministic output; Unicode/multiline/code-fence/quote fidelity; skill folder
+  (scripts/refs/assets) round-trips.
+- **Precedence tests:** rule/role id conflict fails; profile override works; layer order.
+- **Security tests:** skill referencing outside project rejected; `curl|sh` in a skill
+  script flagged; T4 skill cannot declare implicit invocation.
+- **Progressive-disclosure tests:** doctor flags long/vague descriptions and overlapping
+  triggers.
+
+## 18. Recommended architecture (summary)
+
+Keep the compiler + target-registry + policy + safe-generator + doctor shape. Add:
+(a) canonical Role/Rule/Skill/Command schemas with `schemaVersion`; (b) **Agent Skills
+standard** for skills incl. `scripts/references/assets` + a **`skill.kit.yaml` sidecar**
+(the portable `SKILL.md` keeps `metadata` string→string only); (c)
+capability-aware emitter that **warns on drop**; (d) skill trust tiers + provenance; (e)
+doctor checks in §16; (f) extend the ownership manifest to skill supporting files.
+
+## 19. Migration plan (for the later implementation task)
+
+1. Add new fields as **optional/additive** (old frontmatter still parses).
+2. Introduce `metadata:` on skills; keep emitting current Claude/Cursor output byte-stable
+   until a golden update is intentional.
+3. Migrate `id`→directory-name, `paths`(skill)→removed, `related_*`→`metadata`.
+4. Add `activation`/`enforcement.type` to rules as a superset of `scope`/`enforce`.
+5. Update golden fixtures in one reviewed commit (`UPDATE_GOLDEN=1`).
+6. Emitter drop-warnings + doctor checks land last, behind tests.
+
+## 20. P0 / P1 / P2 roadmap
+
+- **P0 (correctness/portability) — DONE:** align Skill frontmatter to the open standard;
+  remove `paths` from skills; add `enforcement.type` vocabulary to rules; emitter
+  drop-warnings.
+- **P1 (capability/security) — DONE:** skill `scripts/references/assets` + manifest
+  tracking; trust tiers + provenance/hash; doctor §16 checks; rule precedence/conflict
+  fail; Role capability/permission contract (verified subagent field emission); Rule
+  activation/enforcement.type contract.
+- **P2 (ergonomics) — DONE:**
+  - **`.agents/skills/` discovery** — verified (Codex: `learn.chatgpt.com/docs/
+    build-skills`, scans `$CWD/.agents/skills`, `$CWD/../.agents/skills`,
+    `$REPO_ROOT/.agents/skills`, `$HOME/.agents/skills`, `/etc/codex/skills`, same-name
+    skills across tiers are NOT merged — both stay selectable; Gemini CLI: `geminicli.com/
+    docs/cli/skills/`, reads `.agents/skills/` and prioritizes it over its own native
+    `.gemini/skills/`). **Implemented:** the `agentsmd` target now also emits a strictly
+    portable `SKILL.md` (name/description/license/compatibility/metadata/allowed-tools
+    only — no Claude extensions) to `.agents/skills/<id>/` for every skill.
+  - **Per-abstraction `schemaVersion`** — implemented for Skill (`skill.kit.yaml`), Role,
+    and Rule: absent is fine (implicit v1); non-integer/non-positive is an ERROR; a
+    valid-but-unrecognized future version is a forward-compatibility WARNING, never
+    build-blocking.
+  - **Token measurement for progressive disclosure** — implemented as `estimateTokenBudget()`
+    + `doctor --tokens` (also folds into `--json`). A **documented estimate** (chars/4,
+    explicitly labeled "NOT an exact tokenizer"), itemizing always-loaded (always-on rule
+    bodies, role catalog, skill catalog) vs on-demand (path/glob rule bodies, role
+    prompts, skill bodies) — this is what finally lets the kit say something concrete
+    about context cost instead of just asserting savings.
+  - **Profile override UX** — Rules gained the same `override: true` mechanism invariants
+    already had: a profile rule sharing an engine rule's `id` without `override: true` is
+    a conflict (fails build); with it, the profile rule replaces the engine one in place.
+
+## 21. Open questions
+
+- Does current Claude Code natively auto-load `.claude/rules/*.md` with `paths:`
+  frontmatter, or is `CLAUDE.md`/skills the only native path? (**blocks the rule story**)
+- Exact Cursor rules `.mdc` field set and activation names in the current version.
+- Windsurf `model_decision`/`glob`/`manual`/`always_on` exact frontmatter keys today.
+- Copilot custom-agent schema and whether it accepts tool restrictions.
+- `.agents/skills/` adoption breadth (Codex/Gemini) and precedence vs vendor paths.
+- Gemini CLI custom-agent + skill-consent model.
+
+## 22. Official source list
+
+| Source | Type | Accessed | Status |
+|---|---|---|---|
+| agents.md | open spec | 2026-07-11 | verified |
+| agentskills.io (overview + client list) | open spec | 2026-07-11 | verified |
+| agentskills.io/specification | open spec | 2026-07-11 | referenced, not fully read (partial) |
+| code.claude.com/docs/en/skills | vendor doc | 2026-07-11 | verified |
+| code.claude.com/docs/en/memory (`.claude/rules/` `paths:`) | vendor doc | 2026-07-11 | verified |
+| code.claude.com/docs/en/sub-agents (full frontmatter table: name/description/tools/disallowedTools/model/permissionMode/maxTurns/skills/mcpServers/hooks/memory/background/effort/isolation/color/initialPrompt) | vendor doc | 2026-07-11 | verified |
+| docs.github.com/…/about-agent-skills + …/add-skills (`.github/.claude/.agents skills`, allowed-tools warning) | vendor doc | 2026-07-11 | verified |
+| docs.windsurf.com/windsurf/cascade/skills (`.windsurf/skills` + `.agents/skills`; Skills≠Rules≠Workflows) | vendor doc | 2026-07-11 | verified |
+| agentskills.io/specification (metadata = string→string; scripts/references/assets; allowed-tools experimental) | open spec | 2026-07-11 | verified |
+| cursor.com/docs/context/skills | vendor doc | 2026-07-11 | existence verified, not read (partial) |
+| docs.github.com/en/copilot/concepts/agents/about-agent-skills | vendor doc | 2026-07-11 | existence verified (partial) |
+| developers.openai.com/codex/skills/ → redirects to learn.chatgpt.com/docs/build-skills (`.agents/skills/` discovery tiers, no-merge-on-name-clash) | vendor doc | 2026-07-11 | verified |
+| geminicli.com/docs/cli/skills/ (`.agents/skills/` alias precedence over native `.gemini/skills/`) | vendor doc | 2026-07-11 | verified |
+| Cursor rules / Windsurf rules / Copilot instructions / GEMINI.md | vendor docs | — | training Jan 2026, not re-fetched (partial) |
+
+## 23. Academic / research source list
+
+Cited by name; **not re-fetched 2026-07-11** unless noted. Confidence labeled.
+
+- Liu et al., "Lost in the Middle: How Language Models Use Long Contexts" (TACL 2023) —
+  position-dependent context degradation → basis for progressive disclosure. *partial.*
+- Greshake et al., "Not what you've signed up for: Compromising Real-World LLM-Integrated
+  Applications with Indirect Prompt Injection" (ACM AISec 2023) → skill description /
+  content poisoning. *partial.*
+- OWASP Top 10 for LLM Applications (LLM01 Prompt Injection, LLM05 Supply Chain, LLM07/
+  Excessive Agency) → skill supply-chain + capability leakage framing. *partial.*
+- Anthropic engineering: "Equipping agents for the real world with Agent Skills" /
+  context-engineering posts → progressive disclosure rationale. *partial (official blog,
+  exact URL not re-fetched).*
+
+## 24. CHƯA XÁC MINH (must verify before relying on)
+
+Resolved since first draft (now **VERIFIED**, see §7 / ADR-004): Claude `.claude/rules/`
+path-scoping; Claude command↔skill compatibility + manual-only; Copilot Agent Skills +
+`.github/skills`/`.claude/skills`/`.agents/skills`; Windsurf `.windsurf/skills/` +
+`.agents/skills/`; the full Claude subagent frontmatter table (`tools`,
+`disallowedTools`, `model`, `permissionMode`, `maxTurns`, `skills`, `mcpServers`,
+`hooks`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`) —
+per-subagent worktree isolation, maxTurns and per-role memory are all **verified**, no
+longer open. Also resolved: **`.agents/skills/` discovery + precedence** — Codex
+(`learn.chatgpt.com/docs/build-skills`) scans five tiers (cwd, parent, repo root, home,
+`/etc/codex/skills`) and does NOT merge same-name skills across locations (both stay
+selectable, not a strict override); Gemini CLI (`geminicli.com/docs/cli/skills/`) reads
+`.agents/skills/` at user+workspace tiers and the `.agents/` alias wins over its own
+native `.gemini/skills/` when both exist at the same tier. Neither reads `.claude/
+skills/`. Implemented: the kit's `agentsmd` target now emits a portable `SKILL.md` to
+`.agents/skills/<id>/` for exactly this reason. Still open:
+
+- Exact current Cursor `.mdc` rule field set and Cursor skill folder/precedence/extensions
+  (**PARTIAL** — official doc exists, details not fully readable).
+- Gemini `GEMINI.md`/custom-agent + skill-consent specifics.
+- Codex/Copilot/Cursor/Windsurf/Gemini subagent-equivalent frontmatter (none confirmed to
+  accept anything resembling Claude's field set).
+- Subagent-calls-subagent nesting on Claude.
+- `mcpServers`/`hooks`/`color`/`initialPrompt` are verified Claude subagent fields not yet
+  modeled in the kit's canonical Role schema (a scope gap, not a verification gap).
+- Exact "context rot" primary citation (industry report vs peer-reviewed).
+- Any peer-reviewed paper specifically analyzing `SKILL.md` (likely none yet → treat as
+  emerging).
