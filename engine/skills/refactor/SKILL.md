@@ -1,7 +1,7 @@
 ---
 name: refactor
 description: Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code.
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access and git.
 metadata:
   sixmen-version: "1.0.0"

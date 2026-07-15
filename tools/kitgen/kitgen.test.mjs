@@ -925,7 +925,7 @@ test("agentsmd: emits a PORTABLE SKILL.md per skill to .agents/skills/, no Claud
   for (const id of ["code-review", "guard-design", "refactor", "release-check", "security-review", "test-design"]) {
     const md = readFileSync(join(tmp, "out", ".agents", "skills", id, "SKILL.md"), "utf8");
     assert.match(md, new RegExp(`name: "${id}"`));
-    assert.match(md, /license: "Proprietary"/);
+    assert.match(md, /license: "Apache-2.0"/);
     assert.match(md, /compatibility:/);
     assert.match(md, /metadata:/);
     assert.doesNotMatch(md, /when_to_use:/, "Claude-only field must not appear in the portable overlay");

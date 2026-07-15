@@ -1,7 +1,7 @@
 ---
 name: pre-build-critique
 description: Use BEFORE writing or editing code for a new or non-trivial change. Invoke to challenge the change through fixed lenses — correctness, security & data, consistency, simplicity, reversibility — and record a go/adjust/stop verdict before building.
-license: Proprietary
+license: Apache-2.0
 compatibility: Requires repository read access and git.
 metadata:
   sixmen-version: "1.0.0"

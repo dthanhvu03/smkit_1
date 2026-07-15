@@ -2,7 +2,7 @@
 # GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
 name: "release-check"
 description: "Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict."
-license: "Proprietary"
+license: "Apache-2.0"
 compatibility: "Requires repository read access and git."
 ---
 
