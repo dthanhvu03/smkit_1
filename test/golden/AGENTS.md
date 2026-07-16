@@ -14,6 +14,7 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 4. **Record decisions.** When you make a non-trivial technical choice (a library, a structure, a naming convention), append it to the Decision Log so future sessions stay consistent.
 5. **Match the mode.** `vibe` = move fast, minimal ceremony, talk to the user in plain (non-technical) language. `standard` = brief + self-review + tests. `strict` = full gate chain + human approval for schema/prod/data.
 6. **Approvals are real.** For anything listed under `approvers` (schema change, prod deploy, data delete), stop and get sign-off unless the approver list is empty (self-approve).
+7. **Secrets stay out of chat and code.** Never paste real secrets, `.env` files, tokens, production data, or customer info into the prompt (use placeholders), and never commit them. If a secret is exposed, tell the user to **rotate** it — deleting the text is not enough.
 
 # Evidence gate — don't claim done without proof
 
@@ -50,6 +51,7 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - **cross-review** — Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
 - **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
 - **guard-design** — Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
+- **impact-map** — Use BEFORE a non-trivial change — do not edit code yet. Invoke to map every read/write of the affected data and all the routes, services, jobs, events, and tests that touch it, so a change doesn't silently break something the agent never saw.
 - **pre-build-critique** — Use BEFORE writing or editing code for a new or non-trivial change. Invoke to challenge the change through fixed lenses — correctness, security & data, consistency, simplicity, reversibility — and record a go/adjust/stop verdict before building.
 - **refactor** — Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code.
 - **release-check** — Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict.

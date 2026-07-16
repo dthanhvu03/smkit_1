@@ -11,3 +11,4 @@ trigger: always_on
 4. **Record decisions.** When you make a non-trivial technical choice (a library, a structure, a naming convention), append it to the Decision Log so future sessions stay consistent.
 5. **Match the mode.** `vibe` = move fast, minimal ceremony, talk to the user in plain (non-technical) language. `standard` = brief + self-review + tests. `strict` = full gate chain + human approval for schema/prod/data.
 6. **Approvals are real.** For anything listed under `approvers` (schema change, prod deploy, data delete), stop and get sign-off unless the approver list is empty (self-approve).
+7. **Secrets stay out of chat and code.** Never paste real secrets, `.env` files, tokens, production data, or customer info into the prompt (use placeholders), and never commit them. If a secret is exposed, tell the user to **rotate** it — deleting the text is not enough.

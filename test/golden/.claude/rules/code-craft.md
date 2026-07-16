@@ -50,6 +50,14 @@ the stack conventions (casing/layout).
 - **SOLID, pragmatically** — one clear responsibility per unit (SRP); depend on an
   interface/abstraction at a real seam (DIP), not everywhere.
 
+## Dependencies — vet before adding
+Before adding a package, confirm: it actually exists and is actively maintained (not a
+hallucinated or abandoned name); it's compatible with the current framework/runtime; there
+isn't a smaller or standard-library alternative; what it pulls in (check the lockfile diff)
+and its license/security history are acceptable. Never `--force` past an install/audit
+warning to make it go in. Record a kept dependency in the Decision Log — and never add a
+second library for a job that already has one (consistency-guard).
+
 > Sources: naming & functions — *Clean Code* (R. C. Martin); SOLID — R. C. Martin;
 > patterns "use when justified" — *Design Patterns* (GoF); casing verified 2026-07-16 —
 > Effective Go (`MixedCaps`, go.dev/doc/effective_go) and PEP 8 (snake_case / CapWords,
