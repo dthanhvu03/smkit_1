@@ -8,6 +8,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **Multiple stack profiles per project** — a full-stack repo (e.g. a Go backend + a Next.js frontend) can declare several profiles (`profile: [go, nextjs]`). Each profile's conventions are path-scoped to its own files (Go → `**/*.go`, Next.js → `**/*.tsx`), so they compose without collision. `init` accepts a comma-separated answer (`go,nextjs`).
+- **Per-stack root folders (monorepo)** — each stack can be scoped to its own subtree via `stack.roots` (`go: apps/api`, `nextjs: apps/web`); its conventions then apply only there (`apps/api/**/*.go`, `apps/web/**/*.tsx`) instead of repo-wide. `init` asks a folder per stack when several are chosen (scripted: `--roots "go=apps/api,nextjs=apps/web"`); blank = repo-wide.
 
 ### Changed
 - **`init` asks the language first, then runs the whole interview in that language** — Vietnamese prompts included. No more English-only setup for `vi` users.

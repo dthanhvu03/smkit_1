@@ -11,6 +11,10 @@ mode: vibe              # vibe | standard | strict
 
 stack:
   profile: generic      # generic | go | nextjs | python  (or a list for full-stack, e.g. [go, nextjs])
+  # For a monorepo, scope each stack to its own folder so conventions don't cross-apply:
+  # roots:
+  #   go: apps/api
+  #   nextjs: apps/web
   test: ""              # e.g. "npm test"   (profile provides defaults)
   lint: ""              # e.g. "npm run lint"
   build: ""             # e.g. "npm run build"

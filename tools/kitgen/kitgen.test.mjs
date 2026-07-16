@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
-import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList } from "../../engine/emitter.mjs";
+import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -830,6 +830,23 @@ test("multi-stack: an unknown profile inside the list is reported", () => {
   const errs = validateConfig({ ...GOODCFG, stack: { profile: ["go", "bogus"] } }, { kitDir: KIT }).errors.join("|");
   assert.match(errs, /bogus/);
   assert.ok(!/\bgo\b(?!.*không)/.test(errs) || /bogus/.test(errs), "only the missing one is flagged");
+});
+test("profileRoot: reads + normalizes a per-stack root folder", () => {
+  assert.equal(profileRoot({ stack: { roots: { go: "apps/api/" } } }, "go"), "apps/api");
+  assert.equal(profileRoot({ stack: { roots: { go: "./apps/api" } } }, "go"), "apps/api");
+  assert.equal(profileRoot({ stack: { roots: {} } }, "go"), "");
+  assert.equal(profileRoot({}, "go"), "");
+});
+test("multi-stack: a per-stack root scopes that profile's conventions to its subtree", () => {
+  const cfg = { stack: { profile: ["go", "nextjs"], roots: { go: "apps/api", nextjs: "apps/web" } } };
+  const rules = collectRules(KIT, cfg);
+  const goRule = rules.find((r) => r.id === "go-conventions");
+  const nextRule = rules.find((r) => r.id === "nextjs-conventions");
+  assert.ok(goRule.paths.every((p) => p.startsWith("apps/api/")), `go scoped to subtree: ${goRule.paths}`);
+  assert.ok(nextRule.paths.every((p) => p.startsWith("apps/web/")), `next scoped to subtree: ${nextRule.paths}`);
+  // Without a root, a profile's conventions stay repo-wide (back-compat).
+  const bare = collectRules(KIT, { stack: { profile: ["go"] } }).find((r) => r.id === "go-conventions");
+  assert.ok(bare.paths.includes("**/*.go"), `unscoped stays repo-wide: ${bare.paths}`);
 });
 test("multi-stack: a profile list emits every profile's conventions", () => {
   const tmp = mkdtempSync(join(tmpdir(), "kit-multi-"));

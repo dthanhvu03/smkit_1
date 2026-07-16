@@ -87,6 +87,20 @@ export function profileList(cfg) {
   return list.length ? list : ["generic"];
 }
 
+// Optional per-stack root directory (monorepo): a profile's conventions can be scoped
+// to its own subtree, so a Go service and a Next.js app never cross-apply. Reads
+// cfg.stack.roots[id]; returns "" when none. Normalizes "./x/" → "x".
+export function profileRoot(cfg, id) {
+  const roots = cfg?.stack?.roots;
+  const r = roots && typeof roots === "object" && !Array.isArray(roots) ? roots[id] : undefined;
+  return r ? String(r).replace(/^\.?\/+/, "").replace(/\/+$/, "") : "";
+}
+
+// Prefix a path glob with a root dir (glob-safe): "**/*.go" under "apps/api" → "apps/api/**/*.go".
+function scopeGlob(root, p) {
+  return root ? `${root}/${String(p).replace(/^\.\//, "")}` : p;
+}
+
 export function collectRules(kitDir, cfg) {
   const rules = [];
   for (const f of listMdAt(kitDir, "engine/rules")) {
@@ -99,9 +113,16 @@ export function collectRules(kitDir, cfg) {
     const profFile = join(kitDir, profDir, "profile.yaml");
     if (!existsSync(profFile)) continue;
     const prof = parseYaml(readFileSync(profFile, "utf8"));
+    const root = profileRoot(cfg, pid);
     for (const r of prof.rules || []) {
       const { fm, body } = parseFrontmatter(readAt(kitDir, join(profDir, r)));
       const rule = { ...fm, body: body.trim() };
+      // Scope this profile's conventions to its subtree when a root is configured.
+      if (root) {
+        if (Array.isArray(rule.paths)) rule.paths = rule.paths.map((p) => scopeGlob(root, p));
+        if (rule.activation && Array.isArray(rule.activation.paths))
+          rule.activation.paths = rule.activation.paths.map((p) => scopeGlob(root, p));
+      }
       const existingIdx = rule.id ? rules.findIndex((x) => x.id === rule.id) : -1;
       if (existingIdx !== -1 && rule.override === true) rules.splice(existingIdx, 1, rule);
       else rules.push(rule);
@@ -665,7 +686,8 @@ export function collectInvariants(kitDir, cfg, lang = "vi") {
     const profFile = join(kitDir, "profiles", pid, "profile.yaml");
     if (!existsSync(profFile)) continue;
     const prof = parseYaml(readFileSync(profFile, "utf8"));
-    for (const inv of prof.invariants || []) add(inv, "profile");
+    const root = profileRoot(cfg, pid);
+    for (const inv of prof.invariants || []) add(root && inv.path ? { ...inv, path: scopeGlob(root, inv.path) } : inv, "profile");
   }
   for (const inv of Array.isArray(cfg.invariants) ? cfg.invariants : []) add(inv, "project");
   return out;

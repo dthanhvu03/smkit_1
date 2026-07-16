@@ -69,6 +69,7 @@ const PROMPTS = {
     stack: "Which stack(s)? (comma-separated for full-stack, e.g. go,nextjs)",
     mode: "How strict?",
     agents: "Which AI tools? (comma-separated; agentsmd = the open AGENTS.md standard, read by Codex / Gemini CLI)",
+    root: "Folder for this stack (blank = repo root)",
   },
   vi: {
     name: "Dự án của bạn tên gì?",
@@ -78,6 +79,7 @@ const PROMPTS = {
     stack: "Dùng stack nào? (nhiều thì ngăn bằng dấu phẩy, ví dụ go,nextjs)",
     mode: "Mức độ chặt chẽ?",
     agents: "Dùng AI tool nào? (ngăn bằng dấu phẩy; agentsmd = chuẩn mở AGENTS.md, đọc bởi Codex / Gemini CLI)",
+    root: "Thư mục cho stack này (trống = gốc repo)",
   },
 };
 
@@ -93,24 +95,49 @@ answers.never = await ask({ key: "never", q: P.never }, "");
 // Prefer the neutral "generic" profile; else the first available.
 const defaultStack = profiles.includes("generic") ? "generic" : (profiles[0] || "generic");
 const stackRaw = await ask({ key: "stack", q: P.stack }, defaultStack, profiles);
-answers.mode = await ask({ key: "mode", q: P.mode }, "vibe", ["vibe", "standard", "strict"]);
-answers.agents = await ask({ key: "agents", q: P.agents }, "claude,cursor", KNOWN_AGENTS);
-if (rl) rl.close();
 
-// Parse + validate the stack answer: accept a comma-separated list (full-stack), keep
-// only known profiles, and fall back to the default rather than writing an invalid
-// config — so a typo like "go , nextjs" can no longer fail at build time.
+// Parse + validate the stack answer now (we need it to ask per-stack folders): accept
+// a comma-separated list (full-stack), keep only known profiles, and fall back to the
+// default rather than writing an invalid config — so a typo like "go , nextjs" can no
+// longer fail at build time.
 let stacks = String(stackRaw).split(",").map((s) => s.trim()).filter(Boolean);
 const unknownStacks = stacks.filter((s) => !profiles.includes(s));
 if (unknownStacks.length) console.log(`  note: ignoring unknown stack(s): ${unknownStacks.join(", ")}  (valid: ${profiles.join(" / ")})`);
 stacks = stacks.filter((s) => profiles.includes(s));
 if (!stacks.length) stacks = [defaultStack];
+
+// Per-stack root folder (monorepo): each stack's conventions get scoped to its subtree.
+// Scripted: --roots "go=apps/api,nextjs=apps/web". Interactive: ask one folder per stack
+// only when there are several; blank = repo-wide (unchanged behavior).
+const normRoot = (v) => String(v).trim().replace(/^\.?\/+/, "").replace(/\/+$/, "");
+const roots = {};
+const rootsFlag = flag("roots");
+if (rootsFlag) {
+  for (const pair of String(rootsFlag).split(",")) {
+    const [k, v] = pair.split("=").map((x) => (x || "").trim());
+    if (k && v && stacks.includes(k)) roots[k] = normRoot(v);
+  }
+} else if (stacks.length > 1) {
+  for (const s of stacks) {
+    const r = normRoot(await ask({ key: `__root_${s}`, q: `${P.root} — ${s}` }, ""));
+    if (r) roots[s] = r;
+  }
+}
+
+answers.mode = await ask({ key: "mode", q: P.mode }, "vibe", ["vibe", "standard", "strict"]);
+answers.agents = await ask({ key: "agents", q: P.agents }, "claude,cursor", KNOWN_AGENTS);
+if (rl) rl.close();
+
 answers.stack = stacks;                       // internally always an array
 const stackLabel = stacks.join(", ");
 // One profile → a plain string (unchanged config shape); several → a YAML list.
 const stackProfileYaml = stacks.length === 1
   ? `profile: ${stacks[0]}`
   : `profile:\n${stacks.map((s) => `    - ${s}`).join("\n")}`;
+// Optional per-stack roots block, appended under `stack:`.
+const rootsYaml = Object.keys(roots).length
+  ? `\n  roots:\n${Object.entries(roots).map(([k, v]) => `    ${k}: ${v}`).join("\n")}`
+  : "";
 
 const agentsList = answers.agents.split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -125,7 +152,7 @@ project:
 mode: ${answers.mode}
 
 stack:
-  ${stackProfileYaml}
+  ${stackProfileYaml}${rootsYaml}
   test: ""
   lint: ""
   build: ""
