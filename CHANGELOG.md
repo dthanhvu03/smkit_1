@@ -4,6 +4,15 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] — 2026-07-16
+
+### Added
+- **Multiple stack profiles per project** — a full-stack repo (e.g. a Go backend + a Next.js frontend) can declare several profiles (`profile: [go, nextjs]`). Each profile's conventions are path-scoped to its own files (Go → `**/*.go`, Next.js → `**/*.tsx`), so they compose without collision. `init` accepts a comma-separated answer (`go,nextjs`).
+
+### Changed
+- **`init` asks the language first, then runs the whole interview in that language** — Vietnamese prompts included. No more English-only setup for `vi` users.
+- **`init` validates the stack answer** against the known profiles and ignores unknown/duplicate entries with a note, instead of writing an invalid config that only fails later at build time.
+
 ## [0.1.3] — 2026-07-16
 
 ### Added
@@ -32,6 +41,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.4]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.4
 [0.1.3]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.3
 [0.1.2]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.2
 [0.1.1]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.1

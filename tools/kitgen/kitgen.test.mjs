@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
-import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget } from "../../engine/emitter.mjs";
+import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -817,6 +817,31 @@ test("validate: invalid mode / empty agents / unknown agent → errors", () => {
 test("validate: nonexistent profile → error (build never falls back silently)", () => {
   assert.match(validateConfig({ ...GOODCFG, stack: { profile: "laravel-erp" } }, { kitDir: KIT }).errors.join("|"),
     /stack\.profile "laravel-erp" không tồn tại/);
+});
+
+// ---- multi-stack (Go backend + Next.js frontend, etc.) --------------------
+test("profileList: normalizes a string, a list, and empties → a non-empty list", () => {
+  assert.deepEqual(profileList({ stack: { profile: "go" } }), ["go"]);
+  assert.deepEqual(profileList({ stack: { profile: ["go", "nextjs"] } }), ["go", "nextjs"]);
+  assert.deepEqual(profileList({}), ["generic"]);
+  assert.deepEqual(profileList({ stack: { profile: [" go ", "", null] } }), ["go"]); // trims + drops empties
+});
+test("multi-stack: an unknown profile inside the list is reported", () => {
+  const errs = validateConfig({ ...GOODCFG, stack: { profile: ["go", "bogus"] } }, { kitDir: KIT }).errors.join("|");
+  assert.match(errs, /bogus/);
+  assert.ok(!/\bgo\b(?!.*không)/.test(errs) || /bogus/.test(errs), "only the missing one is flagged");
+});
+test("multi-stack: a profile list emits every profile's conventions", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "kit-multi-"));
+  writeFileSync(join(tmp, "kit.config.yaml"),
+    'version: 2\nproject:\n  name: "FS"\n  language: en\nmode: vibe\nstack:\n  profile:\n    - go\n    - nextjs\n  test: ""\nagents:\n  - claude\noutDir: out\n');
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "kitgen.mjs"), "build"],
+    { cwd: tmp, env: { ...process.env, CLAUDE_PROJECT_DIR: tmp }, encoding: "utf8" });
+  assert.equal(r.status, 0, `build failed: ${r.stderr || r.stdout}`);
+  const rulesDir = join(tmp, "out", ".claude", "rules");
+  const emitted = existsSync(rulesDir) ? readdirSync(rulesDir).join(" ") : "";
+  assert.match(emitted, /go-conventions/, "Go conventions must be emitted");
+  assert.match(emitted, /nextjs-conventions/, "Next.js conventions must be emitted");
 });
 test("resolveOutDir: traversal detected via path.relative, sibling-prefix not confused", () => {
   assert.equal(resolveOutDir("/w/app", "dist").outside, false);

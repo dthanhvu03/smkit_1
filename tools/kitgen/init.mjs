@@ -58,20 +58,59 @@ async function ask(question, def, choices) {
   return a || def;
 }
 
+// Interview prompts per language. The language question is asked FIRST (bilingual),
+// then every following question speaks the chosen language.
+const PROMPTS = {
+  en: {
+    name: "What is your project called?",
+    purpose: "In one sentence, what does it do?",
+    users: "Who will use it?",
+    never: "One thing it must NEVER do?",
+    stack: "Which stack(s)? (comma-separated for full-stack, e.g. go,nextjs)",
+    mode: "How strict?",
+    agents: "Which AI tools? (comma-separated; agentsmd = the open AGENTS.md standard, read by Codex / Gemini CLI)",
+  },
+  vi: {
+    name: "Dự án của bạn tên gì?",
+    purpose: "Một câu: nó làm gì?",
+    users: "Ai sẽ dùng nó?",
+    never: "Một điều nó TUYỆT ĐỐI KHÔNG được làm?",
+    stack: "Dùng stack nào? (nhiều thì ngăn bằng dấu phẩy, ví dụ go,nextjs)",
+    mode: "Mức độ chặt chẽ?",
+    agents: "Dùng AI tool nào? (ngăn bằng dấu phẩy; agentsmd = chuẩn mở AGENTS.md, đọc bởi Codex / Gemini CLI)",
+  },
+};
+
 // ---- run ------------------------------------------------------------------
 const answers = {};
-answers.name = await ask({ key: "name", q: "What is your project called?" }, "My App");
-answers.purpose = await ask({ key: "purpose", q: "In one sentence, what does it do?" }, "");
-answers.users = await ask({ key: "users", q: "Who will use it?" }, "");
-answers.never = await ask({ key: "never", q: "One thing it must NEVER do?" }, "");
-// Prefer the neutral "generic" profile; else the first available; else fall back to
-// the string "generic" so an empty profiles/ dir never writes `profile: undefined`.
+// Ask the language FIRST so the rest of the interview speaks it.
+answers.lang = await ask({ key: "lang", q: "Language for instructions? / Ngôn ngữ hướng dẫn?" }, "en", ["en", "vi"]);
+const P = PROMPTS[answers.lang] || PROMPTS.en;
+answers.name = await ask({ key: "name", q: P.name }, "My App");
+answers.purpose = await ask({ key: "purpose", q: P.purpose }, "");
+answers.users = await ask({ key: "users", q: P.users }, "");
+answers.never = await ask({ key: "never", q: P.never }, "");
+// Prefer the neutral "generic" profile; else the first available.
 const defaultStack = profiles.includes("generic") ? "generic" : (profiles[0] || "generic");
-answers.stack = await ask({ key: "stack", q: "Which stack?" }, defaultStack, profiles);
-answers.mode = await ask({ key: "mode", q: "How strict?" }, "vibe", ["vibe", "standard", "strict"]);
-answers.lang = await ask({ key: "lang", q: "Language for instructions?" }, "en", ["en", "vi"]);
-answers.agents = await ask({ key: "agents", q: "Which AI tools? (comma-separated; agentsmd = the open AGENTS.md standard, read by Codex / Gemini CLI)" }, "claude,cursor", KNOWN_AGENTS);
+const stackRaw = await ask({ key: "stack", q: P.stack }, defaultStack, profiles);
+answers.mode = await ask({ key: "mode", q: P.mode }, "vibe", ["vibe", "standard", "strict"]);
+answers.agents = await ask({ key: "agents", q: P.agents }, "claude,cursor", KNOWN_AGENTS);
 if (rl) rl.close();
+
+// Parse + validate the stack answer: accept a comma-separated list (full-stack), keep
+// only known profiles, and fall back to the default rather than writing an invalid
+// config — so a typo like "go , nextjs" can no longer fail at build time.
+let stacks = String(stackRaw).split(",").map((s) => s.trim()).filter(Boolean);
+const unknownStacks = stacks.filter((s) => !profiles.includes(s));
+if (unknownStacks.length) console.log(`  note: ignoring unknown stack(s): ${unknownStacks.join(", ")}  (valid: ${profiles.join(" / ")})`);
+stacks = stacks.filter((s) => profiles.includes(s));
+if (!stacks.length) stacks = [defaultStack];
+answers.stack = stacks;                       // internally always an array
+const stackLabel = stacks.join(", ");
+// One profile → a plain string (unchanged config shape); several → a YAML list.
+const stackProfileYaml = stacks.length === 1
+  ? `profile: ${stacks[0]}`
+  : `profile:\n${stacks.map((s) => `    - ${s}`).join("\n")}`;
 
 const agentsList = answers.agents.split(",").map((s) => s.trim()).filter(Boolean);
 
@@ -86,7 +125,7 @@ project:
 mode: ${answers.mode}
 
 stack:
-  profile: ${answers.stack}
+  ${stackProfileYaml}
   test: ""
   lint: ""
   build: ""
@@ -135,7 +174,7 @@ ${answers.users || "<the users and what they need>"}
 ${answers.never || "<e.g. no destructive database operations in production>"}
 
 ## Non-negotiable choices
-- Stack: ${answers.stack}
+- Stack: ${stackLabel}
 - Mode: ${answers.mode}
 `;
 
@@ -146,7 +185,7 @@ const decisionsSeed = existsSync(kp(".kit", "decisions.template.md"))
   : "# Decision Log\n\n> Record non-trivial technical decisions here so future sessions stay consistent.\n";
 
 // ---- write / dry-run ------------------------------------------------------
-console.log(`\nkit init — ${answers.name}  (stack=${answers.stack}, mode=${answers.mode}, lang=${answers.lang}, agents=${agentsList.join("+")})\n`);
+console.log(`\nkit init — ${answers.name}  (stack=${stackLabel}, mode=${answers.mode}, lang=${answers.lang}, agents=${agentsList.join("+")})\n`);
 const log = (action, rel) => console.log(`  ${action.padEnd(28)} ${rel}`);
 
 // Self-contained install (decision A): copy the kit's own source into the project

@@ -7,7 +7,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { join, resolve, relative, isAbsolute, dirname, basename, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectInvariants, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, loadDoctorStrings, fmt } from "../../engine/emitter.mjs";
+import { collectInvariants, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, loadDoctorStrings, fmt, profileList } from "../../engine/emitter.mjs";
 
 export const KNOWN_AGENTS = ["agentsmd", "claude", "cursor", "copilot", "windsurf"];
 export const MODES = ["vibe", "standard", "strict"];
@@ -60,12 +60,14 @@ export function validateConfig(cfg, { kitDir, projectDir, lang = "vi" } = {}) {
   if (!MODES.includes(cfg.mode))
     errors.push(fmt(strings, "CONFIG_MODE_INVALID", { mode: cfg.mode, modes: MODES.join(" | ") }));
 
-  const profile = cfg.stack?.profile;
+  // One or more stack profiles; every one must exist (a full-stack project may list
+  // several, e.g. go + nextjs). Report the ones that are missing.
   let profileMissing = false;
   if (kitDir) {
-    if (!profile || !existsSync(join(kitDir, "profiles", profile, "profile.yaml"))) {
+    const missing = profileList(cfg).filter((p) => !existsSync(join(kitDir, "profiles", p, "profile.yaml")));
+    if (missing.length) {
       profileMissing = true;
-      errors.push(fmt(strings, "CONFIG_PROFILE_NOT_FOUND", { profile }));
+      errors.push(fmt(strings, "CONFIG_PROFILE_NOT_FOUND", { profile: missing.join(", ") }));
     }
   }
 

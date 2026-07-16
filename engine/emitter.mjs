@@ -77,15 +77,27 @@ export function fmt(strings, code, params = {}) {
 // rule in place rather than leaving both, so it does not also trip the id-conflict
 // check in validateRuleGovernance. A same-id profile rule WITHOUT `override: true` is
 // left as a genuine duplicate for that check to catch (no silent shadowing).
+// A project may declare one stack profile (a string) or several (a list) — e.g. a Go
+// backend + a Next.js frontend. Each profile's conventions are path-scoped to its own
+// files (Go → **/*.go, Next → **/*.tsx), so multiple profiles compose without collision.
+// Always returns a non-empty list; falls back to ["generic"].
+export function profileList(cfg) {
+  const p = cfg?.stack?.profile;
+  const list = (Array.isArray(p) ? p : [p]).map((x) => (x == null ? "" : String(x).trim())).filter(Boolean);
+  return list.length ? list : ["generic"];
+}
+
 export function collectRules(kitDir, cfg) {
   const rules = [];
   for (const f of listMdAt(kitDir, "engine/rules")) {
     const { fm, body } = parseFrontmatter(readAt(kitDir, join("engine/rules", f)));
     rules.push({ ...fm, body: body.trim() });
   }
-  const profDir = join("profiles", cfg.stack?.profile || "generic");
-  const profFile = join(kitDir, profDir, "profile.yaml");
-  if (existsSync(profFile)) {
+  // Each declared profile contributes its (path-scoped) convention rules.
+  for (const pid of profileList(cfg)) {
+    const profDir = join("profiles", pid);
+    const profFile = join(kitDir, profDir, "profile.yaml");
+    if (!existsSync(profFile)) continue;
     const prof = parseYaml(readFileSync(profFile, "utf8"));
     for (const r of prof.rules || []) {
       const { fm, body } = parseFrontmatter(readAt(kitDir, join(profDir, r)));
@@ -649,9 +661,9 @@ export function collectInvariants(kitDir, cfg, lang = "vi") {
     out.push(rec);
   };
 
-  const profDir = join("profiles", cfg.stack?.profile || "generic");
-  const profFile = join(kitDir, profDir, "profile.yaml");
-  if (existsSync(profFile)) {
+  for (const pid of profileList(cfg)) {
+    const profFile = join(kitDir, "profiles", pid, "profile.yaml");
+    if (!existsSync(profFile)) continue;
     const prof = parseYaml(readFileSync(profFile, "utf8"));
     for (const inv of prof.invariants || []) add(inv, "profile");
   }
