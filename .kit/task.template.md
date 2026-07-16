@@ -8,6 +8,16 @@
 - **Branch:** feature/<slug>   ·   **PR:** <link once opened>
 - **Mode:** vibe · standard · strict
 
+## Gate status
+<!-- One glance = where this task stands. Tick as each gate passes; a gate that failed
+     or was skipped BLOCKS shipping — say which and why. Mark n/a when a gate doesn't apply. -->
+- [ ] **Challenge** (pre-build critique) — <verdict: go / adjust / stop>
+- [ ] **Impact map** done (required if it touches shared data/behaviour)
+- [ ] **Review** (correctness + consistency)
+- [ ] **Tests** pass (evidence — what ran → result)
+- [ ] **Required artifacts** present (schema → migration + rollback; money/auth/PII → walkthrough + 2nd review)
+- [ ] **Approval** (schema / prod / data) — or n/a
+
 ## Scope
 - **In:** <what this task delivers — one or two lines>
 - **Out:** <what is explicitly NOT in this task, so it doesn't grow>
