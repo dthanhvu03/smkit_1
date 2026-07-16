@@ -85,6 +85,7 @@ The generated config adds slash commands you run *while building* — the workfl
 /task        open a work record — scope, acceptance, impact map, plan — before building; traceable & resumable
 /roundtable  when it's non-trivial or contested, the roles converge on a decision (bounded — no endless debate)
 /start       plan the smallest next step and build it, per mode
+/handoff     package a delivery for the owner — what was built, proof, impact, what to approve
 /review      static review of the diff · /checkup consistency audit · /decide record a decision
 ```
 

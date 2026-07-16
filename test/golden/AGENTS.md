@@ -33,6 +33,7 @@ Intent → command:
 | Look at a diff / code without building | `/review` |
 | Check the project for inconsistency / drift | `/checkup` |
 | Record a decision that was made | `/decide` |
+| Hand finished work back to the owner to review / approve | `/handoff` |
 | Just a question or explanation | no command — answer directly |
 
 Rules of thumb:
@@ -89,6 +90,7 @@ Rules of thumb:
 - `/checkup` — Audit the project against its Constitution and Decision Log, report drift in plain language, and offer to fix it.
 - `/decide` — Append a technical decision to the Decision Log so future sessions stay consistent.
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
+- `/handoff` — Assemble a plain-language "human-control package" for a delivered piece of work — what was built, proof it works, what it touched and how to undo it, and what the owner must approve — so a non-technical owner can review, sign off, and stay in control. Runs at the end of /ship or on its own.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
 - `/ship` — Take a request from idea to shipped — discovery, critique, design, build, review, QA, and deploy — running the whole team pipeline and pausing only where you must decide. For a whole feature; use /start for a small next step.

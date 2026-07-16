@@ -24,7 +24,7 @@ Run the full delivery pipeline for one feature, coordinating the team (the orche
 5. **Build** — start on a `feature/*` branch (**git-workflow** skill — never on `main`/`dev`); implementer writes each slice following existing patterns, committing small, atomic Conventional Commits as it goes. Pull in specialists as needed: db-admin (schema/migrations), debugger (failures), git-manager (branches/commits/PR), docs-manager (docs ↔ code).
 6. **Verify** — reviewer reads the diff (correctness + consistency); qa runs the tests and confirms behavior. Nothing is "done" without evidence (the evidence gate).
 7. **Ship** — open a small, described **pull request** (git-workflow: reviewed, squash-merged — no self-merge, no merge on red tests); if the change touches schema / prod / data, get the approver's sign-off; tag the release (SemVer, via **release-check**); then devops deploys with a reversible, backed-up step. An emergency production fix uses the hotfix flow (branch off `main`, merge back into BOTH `main` and `dev`). ⟵ *your decision (strict)*
-8. **Close** — append the decisions made to `.kit/decisions.md` and give a plain-language summary of what was delivered.
+8. **Close** — append the decisions made to `.kit/decisions.md`, then run **/handoff** to assemble the human-control package (`.kit/tasks/<id>-handoff.md`): what was delivered in plain language, proof it works, what it touched + how to undo it, and what you must approve. Give the founder that summary. (In `vibe`, keep it to a short walkthrough.)
 
 Scale to the mode: `vibe` = move fast, compress the checkpoints, talk plainly; `standard` = brief + review + tests at each stage; `strict` = full gate chain + human approval for schema/prod/data.
 

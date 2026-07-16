@@ -21,6 +21,7 @@
     ".kit/constitution.template.md",
     ".kit/decisions.template.md",
     ".kit/task.template.md",
+    ".kit/handoff.template.md",
     "kit.config.yaml",
     "README.md"
   ],
