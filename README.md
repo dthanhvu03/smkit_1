@@ -10,6 +10,7 @@ AI coding agents drift: each session they re-decide structure, invent a second w
 - 🧭 **Stays consistent** — the AI reads your project's **Constitution** and **Decision Log** at the start of every session and must follow them.
 - 🎚️ **Three modes** — `vibe` (fast, plain language, minimal ceremony) → `standard` → `strict` (full review + human approval). One setting.
 - 🔌 **One source, many tools** — edit once; generate `CLAUDE.md`/`.claude/*`, `.cursor/rules/*`, `.github/*` (Copilot), `.windsurf/rules/*`, and `AGENTS.md` + `.agents/skills/*` (Codex/Gemini) with no drift.
+- 📦 **A workflow that hands control back to you** — describe a goal and the kit **suggests the fitting command**, then runs a **gated pipeline** (task → build → verify → ship) on a proper git branch. Risky changes must carry their evidence (schema → migration + rollback; money/auth → walkthrough + a second review), and each delivery ends in a plain-language **handoff** — what was built, proof it works, and what you must approve — so you stay in control without reading code.
 
 ## Quick start
 
