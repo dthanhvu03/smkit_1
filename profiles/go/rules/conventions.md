@@ -10,6 +10,7 @@ title: Go conventions
 # Go conventions — idiomatic, one way to do each thing
 
 - **Formatting:** `gofmt`/`go vet` clean. Never hand-format.
+- **Naming:** `MixedCaps`/`mixedCaps`, never underscores; exported = Capitalized first letter, unexported = lowercase. No `Get` prefix on getters (`Owner()`, not `GetOwner()`). One-method interfaces take the `-er` suffix (`Reader`). (Effective Go)
 - **Layout:** `cmd/<app>/` for entrypoints, `internal/` for private packages, package-per-directory.
 - **Errors:** return `error`; wrap with `fmt.Errorf("...: %w", err)`; don't panic in library code.
 - **Concurrency:** pass `context.Context` as the first arg to blocking calls; don't leak goroutines.

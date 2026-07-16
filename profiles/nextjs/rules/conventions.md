@@ -15,6 +15,7 @@ title: Next.js conventions (App Router)
 
 - **Router:** App Router (`app/`). Do not add the Pages Router.
 - **Language:** TypeScript everywhere. No plain `.js` for app code.
+- **Naming:** `camelCase` for variables/functions, `PascalCase` for components/types, `UPPER_SNAKE` for constants; component files `PascalCase.tsx`.
 - **Components:** Server Components by default; add `"use client"` only when you need interactivity/state.
 - **Styling:** one system only (the one recorded in the Decision Log). Do not mix Tailwind + CSS modules + styled-components.
 - **Data:** fetch in Server Components / route handlers; keep secrets server-side. Don't call the DB from client components.
