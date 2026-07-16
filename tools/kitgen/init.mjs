@@ -278,10 +278,11 @@ storage/logs/*
 `;
 
 // Memory files + .gitignore are the user's own content — never clobber if they exist.
+let constitutionWritten = false;
 for (const [rel, content] of [[".kit/constitution.md", constitution], [".kit/decisions.md", decisionsSeed], [".gitignore", gitignore]]) {
   const ex = existsSync(pp(rel));
   if (DRY) { log(ex ? "keep existing" : "would write", rel); continue; }
-  if (ex) { log("keep existing", rel); } else { writeFileSync(pp(rel), content); log("write", rel); }
+  if (ex) { log("keep existing", rel); } else { writeFileSync(pp(rel), content); log("write", rel); if (rel === ".kit/constitution.md") constitutionWritten = true; }
 }
 
 // Stamp the installed kit version so `smkit update` knows the baseline to upgrade from.
@@ -298,5 +299,11 @@ const r = spawnSync(process.execPath, [kp("tools", "kitgen", "kitgen.mjs"), "bui
 });
 if (r.error) { console.error(`\nBuild failed to start: ${r.error.message}`); process.exit(1); }
 if (r.status !== 0) { console.error(`\nBuild failed (${r.status === null ? "signal " + r.signal : "exit " + r.status}).`); process.exit(r.status || 1); }
+if (constitutionWritten && (!answers.purpose || !answers.users || !answers.never)) {
+  const msg = answers.lang === "vi"
+    ? "Lưu ý: constitution còn chỗ để trống — hãy sửa .kit/constitution.md (dự án · người dùng · điều KHÔNG được làm). AI đọc nó mỗi phiên."
+    : "Heads-up: your constitution has placeholders — edit .kit/constitution.md (what you build · who uses it · what it must never do). The AI reads it every session.";
+  console.log(`\n${msg}`);
+}
 console.log(`\nDone. Open your AI tool and start building "${answers.name}". Run \`node tools/kitgen/kitgen.mjs check\` in CI.`);
 process.exit(0);
