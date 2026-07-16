@@ -49,6 +49,7 @@ log. Confirm the entry exists and matches the diff.
 - Google SRE Book — Ch. 8, Release Engineering (hermetic builds, gradual rollout).
   https://sre.google/sre-book/release-engineering/
 
-> Provenance note: compiled from the authoritative sources above. An automated adversarial
-> cross-check was not completed this session (API session limit) — these are standard,
-> well-established practices; verify against the linked sources if precision matters.
+> Provenance note: verified against source on 2026-07-16 — SemVer's MAJOR/MINOR/PATCH
+> increment rules and the `0.y.z` pre-1.0 rule (semver.org), and the Keep a Changelog
+> categories + "changelogs are for humans" principle (keepachangelog.com). The Google SRE
+> release-engineering principles draw on the linked chapter.

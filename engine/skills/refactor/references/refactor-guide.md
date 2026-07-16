@@ -58,6 +58,7 @@ many tiny reviewed steps over one big rewrite.
 - Michael Feathers, *Working Effectively with Legacy Code* — characterization tests, seams.
 - Refactoring code smells reference. https://refactoring.guru/refactoring/smells
 
-> Provenance note: compiled from the authoritative sources above. An automated adversarial
-> cross-check was not completed this session (API session limit) — these are standard,
-> well-established practices; verify against the linked sources if precision matters.
+> Provenance note: Fowler's definition ("without changing its observable behavior") and
+> the small-steps-under-green-tests discipline ("kept fully working after each
+> refactoring") were verified against refactoring.com on 2026-07-16. The smell → refactoring
+> catalog draws on the same source.

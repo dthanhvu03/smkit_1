@@ -74,6 +74,7 @@ isolation — the real boundary is the OS sandbox. Flag any guardrail gap explic
 - Microsoft STRIDE threat modeling (Threat Modeling: Designing for Security, Shostack).
   https://learn.microsoft.com/azure/security/develop/threat-modeling-tool-threats
 
-> Provenance note: compiled from the authoritative sources above. An automated adversarial
-> cross-check was not completed this session (API session limit) — rankings and CWE/OWASP
-> identifiers are well-established; verify against the linked sources if precision matters.
+> Provenance note: the OWASP Top 10:2021 ranking used here (A01 Broken Access Control …
+> A03 Injection … A10 SSRF) was verified against owasp.org/Top10/2021 on 2026-07-16.
+> STRIDE, the CWE Top 25, and OWASP ASVS are standard OWASP/MITRE frameworks — verify
+> against the linked sources if precision matters.

@@ -96,7 +96,8 @@ what was and wasn't covered rather than skimming everything at once.
 - Orthogonal Defect Classification (defect-type taxonomy) and practitioner severity/
   priority references.
 
-> Provenance note: compiled from the sources above (authoritative primary docs for the
-> Google, OWASP, and SmartBear/Cisco material). An automated adversarial cross-check was
-> attempted but did not complete due to an API session limit — the figures and rankings
-> here are well-established; verify against the linked sources if precision matters.
+> Provenance note: key facts verified against the linked primary sources on 2026-07-16 —
+> the OWASP Top 10:2021 ranking, Google eng-practices' review aspects + the `Nit:`
+> convention, and the SmartBear/Cisco figures ("no more than 200 to 400 LOC", "under 500
+> LOC per hour", review sessions "under 60 minutes"). The defect-taxonomy items draw on
+> the same standard material (ODC).

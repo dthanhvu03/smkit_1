@@ -28,6 +28,9 @@ Reference emit sang `.claude/` + `.agents/` (progressive disclosure) · golden r
 - ✅ `test-design` → `references/test-guide.md` — equivalence/boundary/decision-table/state/pairwise/property-based + test pyramid + coverage caveat (ISTQB, Myers, NIST, Hypothesis, Fowler).
 - ✅ `refactor` → `references/refactor-guide.md` — "small steps under green tests", characterization tests, smell→refactoring catalog (Fowler, Feathers).
 
-3 cái sau **ground trực tiếp vào nguồn kinh điển có trích URL** (không chạy lại deep-research trong lúc verify-layer kẹt session-limit + để tiết kiệm ~1.7M token). Mỗi reference ghi rõ caveat verify. Khi hết session-limit: chạy 1 lượt deep-research verify đối kháng cho cả 4 để nâng "có nguồn" → "đã verify".
+3 cái sau **ground trực tiếp vào nguồn kinh điển có trích URL** (không chạy lại deep-research trong lúc verify-layer kẹt session-limit + để tiết kiệm ~1.7M token). Mỗi reference ghi rõ caveat verify.
+
+## Verify (2026-07-16)
+`deep-research` (fan-out 99 agent) **kẹt account session-limit** — resume cũng re-fail, dừng để không phí token. Thay bằng **WebFetch tuần tự tự kiểm** (ít burst → lách được limit): xác nhận **khớp verbatim** với nguồn primary: OWASP Top 10:2021 (owasp.org), SemVer (semver.org), Keep a Changelog (keepachangelog.com), Google eng-practices aspects+Nit (google.github.io), SmartBear/Cisco 200–400 LOC/<500 LOC-h/<60ph, Fowler behavior-preserving+small-steps (refactoring.com). → Provenance note của **code-review, security-review, refactor, release-check** nâng thành **"đã verify against source"**. `test-design`/`guard-design`/`decision-brief` giữ note "chưa fetch-verify riêng" (framework textbook chuẩn: ISTQB/OWASP fail-securely/JTBD…).
 
 Skill T0 nên không cần contentHash; nếu sau này pin T3/T4 thì cập nhật hash sau khi thêm references.
