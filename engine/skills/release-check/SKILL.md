@@ -13,6 +13,9 @@ metadata:
 
 Gate a release: nothing ships without evidence.
 
+Work from **[references/release-guide.md](references/release-guide.md)** — SemVer, the Keep
+a Changelog format, safe-rollout (reversible/canary/hermetic), and the full checklist.
+
 ## Workflow
 1. Confirm build/test/lint are green (run them; quote results — evidence gate).
 2. Check version bump + changelog entry match what changed.
