@@ -1200,3 +1200,16 @@ test("update: refuses when run from the project's own copy (KIT_DIR === PROJECT_
   assert.equal(r.status, 1);
   assert.match(r.stderr + r.stdout, /npx @zusem\/smkit@latest update/);
 });
+
+test("update: refuses a downgrade and leaves the project untouched", () => {
+  const proj = copyKit();
+  writeFileSync(join(proj, ".kit", ".smkit-version"), "9.9.9\n"); // project is "newer" than the package
+  const rulePath = join(proj, "engine", "rules", "00-hard-rules.md");
+  const before = readFileSync(rulePath, "utf8");
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "update.mjs"), "--yes", "--no-build"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /downgrade/i);
+  assert.equal(readFileSync(rulePath, "utf8"), before, "a refused downgrade must not touch the project");
+  assert.ok(!existsSync(join(proj, ".smkit-backup")), "a refused downgrade must not even start a backup");
+});

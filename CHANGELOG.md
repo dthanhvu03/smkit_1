@@ -8,6 +8,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **`smkit update`** — refresh a project's self-contained kit source to a new version while **preserving your own content** (`kit.config.yaml`, `.kit/constitution.md`, `.kit/decisions.md`, `.kit/tasks/`, `.gitignore`). It backs up the previous source to `.smkit-backup/`, rebuilds, and reports the version delta. Run `npx @zusem/smkit@latest update` (it must be pulled from a fresh package — a project's own frozen copy has nothing newer). `init` now stamps `.kit/.smkit-version` so updates know the baseline.
+- The update is **safe by construction**: it validates the incoming package is complete before touching anything, applies the refresh transactionally and **rolls back from the backup** if any step fails (so a project is never left half-updated or with a deleted directory), and **refuses a silent downgrade** unless `--force`.
 
 ## [0.1.2] — 2026-07-16
 

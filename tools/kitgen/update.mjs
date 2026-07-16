@@ -48,6 +48,27 @@ if (!existsSync(pp("kit.config.yaml"))) {
 const stampPath = pp(".kit", ".smkit-version");
 const oldVer = existsSync(stampPath) ? readFileSync(stampPath, "utf8").trim() : "unknown (pre-0.1.2)";
 
+// The new package must look complete BEFORE we touch anything — never delete the
+// user's source only to find the replacement missing.
+for (const d of ["engine", "tools"]) {
+  if (!existsSync(kp(d))) {
+    console.error(`smkit update: this package looks incomplete (missing ${d}/). Aborting — nothing changed.`);
+    process.exit(1);
+  }
+}
+
+// Refuse a silent downgrade (an older package run over a newer project) unless forced.
+const cmpVer = (a, b) => {
+  const pa = String(a).split("."), pb = String(b).split(".");
+  for (let i = 0; i < 3; i++) { const x = parseInt(pa[i], 10) || 0, y = parseInt(pb[i], 10) || 0; if (x !== y) return x < y ? -1 : 1; }
+  return 0;
+};
+if (cmpVer(newVer, oldVer) < 0 && !FORCE) {
+  console.error(`smkit update: this package (${newVer}) is OLDER than what's installed (${oldVer}).\n` +
+    "Refusing to downgrade. Run `npx @zusem/smkit@latest update`, or pass --force to override.");
+  process.exit(1);
+}
+
 // Kit-owned = refreshed from the new package. Everything else (config, memory,
 // tasks, .gitignore) is the user's and is left untouched.
 const REPLACE_DIRS = ["engine", "profiles", "tools", join(".kit", "hooks")];
@@ -76,22 +97,41 @@ if (!(await confirm())) { console.log("Cancelled — nothing changed."); process
 
 if (DRY) { console.log("[dry-run] nothing written. Re-run without --dry-run to apply."); process.exit(0); }
 
-// Back up the current kit-owned source, then replace it. The backup protects any
-// in-place edits the user made to engine/ or profiles/.
+// Step 1 — snapshot everything we're about to touch into the backup. Nothing is
+// destroyed yet, so a failure here leaves the project fully intact.
 const backup = pp(".smkit-backup");
-rmSync(backup, { recursive: true, force: true });
-mkdirSync(backup, { recursive: true });
+try {
+  rmSync(backup, { recursive: true, force: true });
+  mkdirSync(backup, { recursive: true });
+  for (const d of REPLACE_DIRS) if (existsSync(pp(d))) cpSync(pp(d), join(backup, d), { recursive: true });
+  for (const f of REPLACE_FILES) if (existsSync(pp(f))) { mkdirSync(dirname(join(backup, f)), { recursive: true }); cpSync(pp(f), join(backup, f)); }
+} catch (e) {
+  console.error(`\nsmkit update: couldn't create a backup (${e?.message || e}). Nothing was changed.`);
+  process.exit(1);
+}
 
-for (const d of REPLACE_DIRS) {
-  if (existsSync(pp(d))) cpSync(pp(d), join(backup, d), { recursive: true });
-  rmSync(pp(d), { recursive: true, force: true });
-  if (existsSync(kp(d))) cpSync(kp(d), pp(d), { recursive: true });
+// Restore the project from the backup — used if the refresh fails part-way.
+const restore = () => {
+  for (const d of REPLACE_DIRS) { rmSync(pp(d), { recursive: true, force: true }); if (existsSync(join(backup, d))) cpSync(join(backup, d), pp(d), { recursive: true }); }
+  for (const f of REPLACE_FILES) if (existsSync(join(backup, f))) cpSync(join(backup, f), pp(f));
+};
+
+// Step 2 — apply the refresh transactionally. Any error rolls the project back so
+// it is never left half-updated or with a deleted directory.
+try {
+  for (const d of REPLACE_DIRS) {
+    if (!existsSync(kp(d))) continue;   // package lacks it → keep the user's, don't delete
+    rmSync(pp(d), { recursive: true, force: true });
+    cpSync(kp(d), pp(d), { recursive: true });
+  }
+  for (const f of REPLACE_FILES) if (existsSync(kp(f))) cpSync(kp(f), pp(f));
+  writeFileSync(stampPath, newVer + "\n");
+} catch (e) {
+  console.error(`\nsmkit update: refresh failed (${e?.message || e}) — rolling back…`);
+  try { restore(); console.error("Rolled back. Your project is unchanged."); }
+  catch (e2) { console.error(`Rollback also failed (${e2?.message || e2}). Restore manually from .smkit-backup/`); }
+  process.exit(1);
 }
-for (const f of REPLACE_FILES) {
-  if (existsSync(pp(f))) { mkdirSync(dirname(join(backup, f)), { recursive: true }); cpSync(pp(f), join(backup, f)); }
-  if (existsSync(kp(f))) cpSync(kp(f), pp(f));
-}
-writeFileSync(stampPath, newVer + "\n");
 console.log(`  ✓ refreshed to ${newVer}. Previous kit source backed up in .smkit-backup/`);
 
 if (!NOBUILD) {
