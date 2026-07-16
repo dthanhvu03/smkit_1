@@ -7,7 +7,15 @@ argument-hint: "[the feature you want delivered]"
 
 # /ship
 
-Run the full delivery pipeline for one feature, coordinating the team (the orchestrator role). This is the single A→Z entrypoint: it sequences every stage and gate, and pauses for you (the founder) only at real decision points. Respect every gate; scale the ceremony to the mode.
+Run the full delivery pipeline for one feature, coordinating the team (the orchestrator role). This is the single A→Z entrypoint: it sequences every stage and gate, and pauses for you (the founder) only at real decision points. Respect every gate; scale the ceremony to the mode. `/ship` is safe to reach for in any situation — it **right-sizes itself** (step 0) rather than forcing a full delivery onto small work.
+
+0. **Triage** — before anything, classify what's actually being asked and take the smallest path that fits; don't run the whole pipeline on work that doesn't need it:
+   - **A whole feature** (idea → shipped) → continue to step 1 (the full run below).
+   - **A small step or a fix, or continuing mid-feature** → drop to the `/start` path (plan the smallest step → build → verify), skipping the task file, PR, and release tag. Say so in one line.
+   - **Just a question, an explanation, or reviewing existing code** → answer it / run `/review`. Do **not** build, branch, or deploy. Stop when the question is answered.
+   - **An emergency production fix** → go straight to the hotfix flow (branch off `main`, minimal fix, merge back into BOTH `main` and `dev`), compressing discovery/design — but never skipping the evidence gate or the approval for prod/data.
+
+   Tell the founder in plain language which path you're taking and why, then proceed. Everything below is the **full-feature** path.
 
 1. **Frame** — read `.kit/constitution.md` and `.kit/decisions.md`; restate the request as a problem in one plain sentence and confirm. For anything non-trivial, **open a task** now (`/task` → `.kit/tasks/<id>.md`); the stages below fill it in (scope, impact, plan) so the work is traceable and resumable.
 2. **Discover** — if the idea is vague or new, run `/discover` (analyst → decision brief); record the **scope** and **acceptance criteria** in the task. Present it and get a go / adjust / stop decision before building. ⟵ *your decision*
