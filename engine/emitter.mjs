@@ -83,7 +83,9 @@ export function fmt(strings, code, params = {}) {
 // Always returns a non-empty list; falls back to ["generic"].
 export function profileList(cfg) {
   const p = cfg?.stack?.profile;
-  const list = (Array.isArray(p) ? p : [p]).map((x) => (x == null ? "" : String(x).trim())).filter(Boolean);
+  // Trim, drop empties, and DEDUPE (order-preserving) — a repeated profile would
+  // otherwise emit a duplicate convention rule and crash on an invariant-id conflict.
+  const list = [...new Set((Array.isArray(p) ? p : [p]).map((x) => (x == null ? "" : String(x).trim())).filter(Boolean))];
   return list.length ? list : ["generic"];
 }
 

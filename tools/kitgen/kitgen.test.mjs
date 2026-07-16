@@ -820,11 +820,20 @@ test("validate: nonexistent profile → error (build never falls back silently)"
 });
 
 // ---- multi-stack (Go backend + Next.js frontend, etc.) --------------------
-test("profileList: normalizes a string, a list, and empties → a non-empty list", () => {
+test("profileList: normalizes a string, a list, empties, and duplicates → a clean list", () => {
   assert.deepEqual(profileList({ stack: { profile: "go" } }), ["go"]);
   assert.deepEqual(profileList({ stack: { profile: ["go", "nextjs"] } }), ["go", "nextjs"]);
   assert.deepEqual(profileList({}), ["generic"]);
   assert.deepEqual(profileList({ stack: { profile: [" go ", "", null] } }), ["go"]); // trims + drops empties
+  assert.deepEqual(profileList({ stack: { profile: ["nextjs", "nextjs", "go"] } }), ["nextjs", "go"]); // dedupes
+});
+test("multi-stack: a duplicated profile no longer crashes the build (invariant/rule id clash)", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "kit-dup-"));
+  writeFileSync(join(tmp, "kit.config.yaml"),
+    'version: 2\nproject:\n  name: "D"\n  language: en\nmode: vibe\nstack:\n  profile:\n    - nextjs\n    - nextjs\n  test: ""\nagents:\n  - claude\noutDir: out\n');
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "kitgen.mjs"), "build"],
+    { cwd: tmp, env: { ...process.env, CLAUDE_PROJECT_DIR: tmp }, encoding: "utf8" });
+  assert.equal(r.status, 0, `duplicated profile must build cleanly: ${r.stderr || r.stdout}`);
 });
 test("multi-stack: an unknown profile inside the list is reported", () => {
   const errs = validateConfig({ ...GOODCFG, stack: { profile: ["go", "bogus"] } }, { kitDir: KIT }).errors.join("|");

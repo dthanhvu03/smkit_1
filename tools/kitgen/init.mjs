@@ -87,6 +87,7 @@ const PROMPTS = {
 const answers = {};
 // Ask the language FIRST so the rest of the interview speaks it.
 answers.lang = await ask({ key: "lang", q: "Language for instructions? / Ngôn ngữ hướng dẫn?" }, "en", ["en", "vi"]);
+if (!["en", "vi"].includes(answers.lang)) { console.log(`  note: unsupported language "${answers.lang}" — using en`); answers.lang = "en"; }
 const P = PROMPTS[answers.lang] || PROMPTS.en;
 answers.name = await ask({ key: "name", q: P.name }, "My App");
 answers.purpose = await ask({ key: "purpose", q: P.purpose }, "");
@@ -105,17 +106,25 @@ const unknownStacks = stacks.filter((s) => !profiles.includes(s));
 if (unknownStacks.length) console.log(`  note: ignoring unknown stack(s): ${unknownStacks.join(", ")}  (valid: ${profiles.join(" / ")})`);
 stacks = stacks.filter((s) => profiles.includes(s));
 if (!stacks.length) stacks = [defaultStack];
+stacks = [...new Set(stacks)];                // drop accidental duplicates (e.g. go,go)
 
 // Per-stack root folder (monorepo): each stack's conventions get scoped to its subtree.
 // Scripted: --roots "go=apps/api,nextjs=apps/web". Interactive: ask one folder per stack
-// only when there are several; blank = repo-wide (unchanged behavior).
-const normRoot = (v) => String(v).trim().replace(/^\.?\/+/, "").replace(/\/+$/, "");
+// only when there are several; blank = repo-wide (unchanged behavior). Only accept a
+// safe, relative path segment (no spaces/colons/leading "..") so the config stays valid.
+const SAFE_ROOT = /^\w[\w./-]*$/;
+const normRoot = (v) => {
+  const s = String(v).trim().replace(/^\.\/+/, "").replace(/\/+$/, "");
+  return SAFE_ROOT.test(s) ? s : "";
+};
 const roots = {};
 const rootsFlag = flag("roots");
 if (rootsFlag) {
   for (const pair of String(rootsFlag).split(",")) {
     const [k, v] = pair.split("=").map((x) => (x || "").trim());
-    if (k && v && stacks.includes(k)) roots[k] = normRoot(v);
+    if (!k || !v || !stacks.includes(k)) continue;
+    const nr = normRoot(v);
+    if (nr) roots[k] = nr; else console.log(`  note: ignoring invalid folder for "${k}": ${v}`);
   }
 } else if (stacks.length > 1) {
   for (const s of stacks) {

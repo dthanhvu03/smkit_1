@@ -12,7 +12,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - **`init` asks the language first, then runs the whole interview in that language** — Vietnamese prompts included. No more English-only setup for `vi` users.
-- **`init` validates the stack answer** against the known profiles and ignores unknown/duplicate entries with a note, instead of writing an invalid config that only fails later at build time.
+- **`init` validates the stack answer** against the known profiles: it ignores unknown entries with a note, **de-duplicates** repeated stacks (a repeated profile used to crash the build on an invariant/rule id clash), coerces an unsupported language back to English, and rejects unsafe folder values — instead of writing an invalid config that only fails later at build time.
 
 ## [0.1.3] — 2026-07-16
 
