@@ -11,6 +11,7 @@ title: Python conventions
 # Python conventions — one way to do each thing
 
 - **Version:** target Python 3.11+. Use type hints on public functions.
+- **Naming:** `snake_case` for functions/variables, `CapWords`/PascalCase for classes, `UPPER_SNAKE` for module constants. (PEP 8)
 - **Layout:** `src/<package>/` for code, `tests/` for tests. One package per project unless the Decision Log says otherwise.
 - **Formatting & lint:** `ruff` only (format + lint). Do not add black/flake8/isort on top.
 - **Tests:** `pytest`. Name tests `test_*.py`; one behavior per test.

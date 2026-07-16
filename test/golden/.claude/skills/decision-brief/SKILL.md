@@ -10,8 +10,12 @@ compatibility: "Requires repository read access."
 
 Turn a vague request into information a non-technical founder can decide on — *before* anyone plans or writes code. Frame the request as a problem, not the feature the founder guessed at.
 
+Work from **[references/decision-guide.md](references/decision-guide.md)** — problem-vs-
+solution framing, Jobs-to-be-Done, MVP/smallest-slice, reversible vs irreversible (one-way
+/ two-way door) decisions, and cost of delay.
+
 ## Workflow
-1. **Reframe** the request as the underlying problem and who has it. State it in one plain sentence and confirm.
+1. **Reframe** the request as the underlying problem and who has it (Jobs-to-be-Done, §1–§2 of the reference). State it in one plain sentence and confirm.
 2. **Explore options** — at least two ways to solve it (including the cheapest/manual one and "do nothing"), each with an honest trade-off. The smallest option that still teaches us something usually wins.
 3. **Size it roughly** — effort, cost, and the risk most likely to make it a waste. Label every number an estimate; never present a guess as a fact.
 4. **Isolate the founder's decision** — the one or two questions only they can answer (budget, audience, acceptable risk), asked in plain language.

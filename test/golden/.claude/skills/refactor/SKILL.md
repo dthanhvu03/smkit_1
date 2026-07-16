@@ -10,9 +10,15 @@ compatibility: "Requires repository read access and git."
 
 Change shape, not behavior. Plan before editing.
 
+Work from **[references/refactor-guide.md](references/refactor-guide.md)** — the "small
+steps under a green suite" discipline, characterization tests for untested code, and the
+smell → named-refactoring catalog.
+
 ## Workflow
-1. State the behavior that must stay identical (the invariant).
-2. Map impact: which files/callers/tests are affected.
+1. State the behavior that must stay identical (the invariant). Ensure a **safety net**:
+   existing tests are green, or add **characterization tests** first (§2 of the reference).
+2. Map impact: which files/callers/tests are affected; pick the **named refactoring** for
+   each smell (§3–§4).
 3. Propose the smallest safe steps; note anything that touches a kit.config invariant.
 4. Define how to verify behavior is unchanged (tests to run) and how to roll back.
 

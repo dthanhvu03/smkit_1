@@ -175,8 +175,34 @@ if (DRY) {
   log("write", "kit.config.yaml");
 }
 
-// Memory files are the user's own content — never clobber if they already exist.
-for (const [rel, content] of [[".kit/constitution.md", constitution], [".kit/decisions.md", decisionsSeed]]) {
+// A .gitignore that keeps secrets, deps, build output, and kit runtime state out of git
+// (the generated agent config at the project root IS meant to be committed). Never
+// clobber an existing one.
+const gitignore = `# Secrets & local env — never commit (rotate if leaked)
+.env
+.env.*
+!.env.example
+
+# Dependencies & build output
+node_modules/
+vendor/
+dist/
+build/
+coverage/
+
+# Logs & dumps
+*.log
+*.sql
+storage/logs/*
+
+# Kit runtime state (regenerated — not shared)
+.kit/audit.log
+.kit/build-manifest.json
+.kit/state/
+`;
+
+// Memory files + .gitignore are the user's own content — never clobber if they exist.
+for (const [rel, content] of [[".kit/constitution.md", constitution], [".kit/decisions.md", decisionsSeed], [".gitignore", gitignore]]) {
   const ex = existsSync(pp(rel));
   if (DRY) { log(ex ? "keep existing" : "would write", rel); continue; }
   if (ex) { log("keep existing", rel); } else { writeFileSync(pp(rel), content); log("write", rel); }

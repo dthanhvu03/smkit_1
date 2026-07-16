@@ -10,7 +10,7 @@ project:
 mode: vibe              # vibe | standard | strict
 
 stack:
-  profile: generic      # generic | nextjs | laravel-erp | python
+  profile: generic      # generic | go | nextjs | python
   test: ""              # e.g. "npm test"   (profile provides defaults)
   lint: ""              # e.g. "npm run lint"
   build: ""             # e.g. "npm run build"

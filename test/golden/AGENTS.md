@@ -14,6 +14,33 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 4. **Record decisions.** When you make a non-trivial technical choice (a library, a structure, a naming convention), append it to the Decision Log so future sessions stay consistent.
 5. **Match the mode.** `vibe` = move fast, minimal ceremony, talk to the user in plain (non-technical) language. `standard` = brief + self-review + tests. `strict` = full gate chain + human approval for schema/prod/data.
 6. **Approvals are real.** For anything listed under `approvers` (schema change, prod deploy, data delete), stop and get sign-off unless the approver list is empty (self-approve).
+7. **Secrets stay out of chat and code.** Never paste real secrets, `.env` files, tokens, production data, or customer info into the prompt (use placeholders), and never commit them. If a secret is exposed, tell the user to **rotate** it — deleting the text is not enough.
+
+# Routing — propose the fitting command, don't make the user memorize
+
+The user talks in plain language and should never have to know which slash command to use. When they describe a goal **without** naming a command, silently classify the intent, then **propose the fitting command in one plain sentence and confirm** before running it. Say what the command does in the user's terms, not jargon. If they already typed a command, respect it.
+
+Intent → command:
+
+| What the user is really asking for | Propose | 
+|---|---|
+| Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
+| A small next step, or continue mid-feature | `/start` |
+| "Should we build this? what are the options?" (vague / new) | `/discover` |
+| "Is this change safe?" before coding | `/challenge` |
+| Prepare/track a piece of work (scope, plan, impact) | `/task` |
+| A contested or non-trivial choice between roles | `/roundtable` |
+| Look at a diff / code without building | `/review` |
+| Check the project for inconsistency / drift | `/checkup` |
+| Record a decision that was made | `/decide` |
+| Hand finished work back to the owner to review / approve | `/handoff` |
+| Just a question or explanation | no command — answer directly |
+
+Rules of thumb:
+- **Don't over-serve.** A one-line fix or a plain question does not need `/ship`; offer the lightest path that fits. Reserve the heavy pipeline (and its gates) for real deliveries so the gates keep their meaning.
+- **When in doubt, offer two.** e.g. *"Sounds like a whole feature — run `/ship`? Or just a quick fix with `/start`?"* Let the user pick.
+- **Scale to the mode.** In `vibe`, keep the suggestion to a few words and move; in `standard`/`strict`, name the command and the gates it will run.
+- `/ship` is the safe default front door: if the user reaches for it for something small, it right-sizes itself (see the triage in `/ship`).
 
 # Evidence gate — don't claim done without proof
 
@@ -23,9 +50,18 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - If a step was skipped or is unverified, say that plainly — don't imply it was checked.
 - Skills that produce a review/verdict (code-review, test-design) must fill their **Test evidence** section; an empty evidence section means the gate is not satisfied.
 
+## Required artifacts by risk (completeness)
+Some change types are not "done" until a specific artifact exists — this is **not optional**, it is part of the gate:
+- **Schema / data-shape change** → a **migration note AND a rollback step** (in the task / handoff). No migration note → not ready to ship.
+- **Money, authentication, or personal-data (PII) touch** → a plain-language **business walkthrough AND a second review pass**. These carry real-world risk; a bare diff is not enough.
+- **Destructive or irreversible operation** → the **reversible / backed-up step is written down** before it runs.
+
+If a required artifact is missing, STOP and produce it — or state plainly why it does not apply — before shipping. This mirrors the task file's **Gate status** checklist; keep the two in sync.
+
 # Conventions (generic profile)
 
 - One way to do each thing. Pick a single approach for state, styling, data access, and routing; record it in the Decision Log and reuse it everywhere.
+- **Naming:** intention-revealing (a reader understands without the body); no cryptic abbreviations. Follow the language's standard casing.
 - Small, readable changes. Prefer clarity over cleverness.
 - Keep files where similar files already are. Don't invent a new top-level folder without recording why.
 - No secrets in code. Use env/config.
@@ -48,7 +84,9 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - **code-review** — Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
 - **cross-review** — Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
 - **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
+- **git-workflow** — Use when starting a feature, opening a pull request, resolving a conflict, cutting a release, or shipping a hotfix. Invoke for the branching model, conventional commits, PR discipline, tagging, and hotfix flow the team follows.
 - **guard-design** — Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
+- **impact-map** — Use BEFORE a non-trivial change — do not edit code yet. Invoke to map every read/write of the affected data and all the routes, services, jobs, events, and tests that touch it, so a change doesn't silently break something the agent never saw.
 - **pre-build-critique** — Use BEFORE writing or editing code for a new or non-trivial change. Invoke to challenge the change through fixed lenses — correctness, security & data, consistency, simplicity, reversibility — and record a go/adjust/stop verdict before building.
 - **refactor** — Use when changing structure without changing behavior. Invoke to plan a safe refactor with impact analysis and a rollback path before touching code.
 - **release-check** — Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict.
@@ -60,7 +98,9 @@ Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md
 - `/checkup` — Audit the project against its Constitution and Decision Log, report drift in plain language, and offer to fix it.
 - `/decide` — Append a technical decision to the Decision Log so future sessions stay consistent.
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
+- `/handoff` — Assemble a plain-language "human-control package" for a delivered piece of work — what was built, proof it works, what it touched and how to undo it, and what the owner must approve — so a non-technical owner can review, sign off, and stay in control. Runs at the end of /ship or on its own.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
 - `/ship` — Take a request from idea to shipped — discovery, critique, design, build, review, QA, and deploy — running the whole team pipeline and pausing only where you must decide. For a whole feature; use /start for a small next step.
 - `/start` — Begin (or resume) work. Reads the project memory, plans the smallest next step, and builds it per the current mode.
+- `/task` — Before building anything non-trivial, open a task record — scope, acceptance criteria, impact map, plan, and tests — so the work is prepared, traceable, and resumable next session. Use inside /ship or on its own.
