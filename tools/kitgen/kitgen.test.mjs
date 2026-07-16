@@ -1164,3 +1164,39 @@ test("doctor: a user's own sibling skill folder directly under .claude/skills/ i
     "a user's own unrelated skill folder must never be flagged as unexpected");
   assert.equal(j.summary.errors, 0);
 });
+
+// ---- smkit update ---------------------------------------------------------
+test("update: refreshes kit-owned source, preserves user content, stamps version", () => {
+  // A project simulating an OLD self-contained install.
+  const proj = copyKit(); // engine/ profiles/ tools/ .kit/ + kit.config.yaml
+  const rulePath = join(proj, "engine", "rules", "00-hard-rules.md");
+  const editFile = (p, from, to) => writeFileSync(p, readFileSync(p, "utf8").replace(from, to));
+  editFile(rulePath, "Hard rules", "STALE OLD MARKER");          // simulate old/edited kit source
+  writeFileSync(join(proj, ".kit", "constitution.md"), "MY PROJECT — do not clobber\n");
+  writeFileSync(join(proj, ".kit", ".smkit-version"), "0.0.1\n");
+
+  // Run the REPO's update.mjs (the "new package") against the project.
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "update.mjs"), "--yes", "--no-build"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 0, `update failed: ${r.stderr || r.stdout}`);
+
+  // kit-owned file is refreshed back to the shipped version…
+  assert.match(readFileSync(rulePath, "utf8"), /Hard rules/, "engine/ must be refreshed from the new package");
+  // …user content is untouched…
+  assert.match(readFileSync(join(proj, ".kit", "constitution.md"), "utf8"), /MY PROJECT/, "user memory must be preserved");
+  // …the stamp advances to the package version…
+  const pkgVer = JSON.parse(readFileSync(join(KIT, "package.json"), "utf8")).version;
+  assert.equal(readFileSync(join(proj, ".kit", ".smkit-version"), "utf8").trim(), pkgVer);
+  // …and a backup of the previous source is kept.
+  assert.ok(existsSync(join(proj, ".smkit-backup", "engine", "rules", "00-hard-rules.md")), "previous source must be backed up");
+  assert.match(readFileSync(join(proj, ".smkit-backup", "engine", "rules", "00-hard-rules.md"), "utf8"), /STALE OLD MARKER/);
+});
+
+test("update: refuses when run from the project's own copy (KIT_DIR === PROJECT_DIR)", () => {
+  const proj = copyKit();
+  // Running the project's OWN update.mjs with cwd == that project = nothing newer to pull.
+  const r = spawnSync(process.execPath, [join(proj, "tools", "kitgen", "update.mjs"), "--yes"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /npx @zusem\/smkit@latest update/);
+});

@@ -12,12 +12,14 @@ const run = (file, args) => spawnSync(process.execPath, [join(HERE, file), ...ar
 let r;
 switch (cmd) {
   case "init": r = run("init.mjs", rest); break;
+  case "update": r = run("update.mjs", rest); break;
   case "build":
   case "check":
   case "doctor": r = run("kitgen.mjs", [cmd, ...rest]); break;
   default:
-    console.log("Usage: smkit <init|build|check|doctor> [options]\n" +
+    console.log("Usage: smkit <init|update|build|check|doctor> [options]\n" +
       "  init    set up the kit in this project (interview or --flags)\n" +
+      "  update  refresh the kit source to a new version (run via npx @zusem/smkit@latest update)\n" +
       "  build   regenerate agent config from the source\n" +
       "  check   fail if generated files are out of sync (CI)\n" +
       "  doctor  health-check the kit + generated output");

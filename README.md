@@ -75,6 +75,20 @@ smkit doctor    # npm run doctor — health-check the kit + generated output (wi
 project, so hooks and the generator run without any `node_modules` dependency and you can edit
 rules/profiles in place.
 
+### Updating to a new version
+
+Because the kit is self-contained, a project holds a frozen copy of the source — a new npm
+release doesn't change it automatically. Pull an update from a fresh package:
+
+```bash
+npx @zusem/smkit@latest update
+```
+
+This refreshes the **kit-owned** files (`engine/ profiles/ tools/ .kit/hooks/` + templates) to
+the new version, **keeps your own content** (`kit.config.yaml`, `.kit/constitution.md`,
+`.kit/decisions.md`, `.kit/tasks/`, `.gitignore`), saves the previous source to `.smkit-backup/`,
+and rebuilds. If you'd edited `engine/` or `profiles/` in place, re-apply those from the backup.
+
 ### Inside your AI tool
 
 The generated config adds slash commands you run *while building* — the workflow, from a fuzzy idea to shipped code:

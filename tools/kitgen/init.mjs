@@ -199,6 +199,7 @@ storage/logs/*
 .kit/audit.log
 .kit/build-manifest.json
 .kit/state/
+.smkit-backup/
 `;
 
 // Memory files + .gitignore are the user's own content — never clobber if they exist.
@@ -207,6 +208,9 @@ for (const [rel, content] of [[".kit/constitution.md", constitution], [".kit/dec
   if (DRY) { log(ex ? "keep existing" : "would write", rel); continue; }
   if (ex) { log("keep existing", rel); } else { writeFileSync(pp(rel), content); log("write", rel); }
 }
+
+// Stamp the installed kit version so `smkit update` knows the baseline to upgrade from.
+if (!DRY) { try { const v = JSON.parse(readFileSync(kp("package.json"), "utf8")).version; if (v) writeFileSync(pp(".kit", ".smkit-version"), v + "\n"); } catch { /* stamp is best-effort */ } }
 
 if (DRY) { console.log("\n[dry-run] nothing written. Re-run without --dry-run to apply."); process.exit(0); }
 
