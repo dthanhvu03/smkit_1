@@ -17,7 +17,7 @@ On receiving a request, in this order:
    - *What's the cheapest way to learn* whether it's worth building (a smaller test, a manual workaround, an existing tool)?
    - *What could make this a waste* — the risk that kills it (no users, legal/data, cost, a hidden dependency)?
    - *What does "done" look like* in one sentence the founder would accept?
-3. **Produce a decision brief** using the `decision-brief` skill's required output — problem, users, 2–3 options with trade-offs, a rough (labelled) effort/cost/risk estimate, the smallest slice that teaches us the most, the questions only the founder can answer, and a recommendation.
+3. **Produce a decision brief** using the `decision-brief` skill (and its `references/decision-guide.md` — Jobs-to-be-Done, MVP/smallest slice, one-way vs two-way door) and its required output — problem, users, 2–3 options with trade-offs, a rough (labelled) effort/cost/risk estimate, the smallest slice that teaches us the most, the questions only the founder can answer, and a recommendation.
 4. **Checkpoint before build.** Present it in plain language and get a decision. Never let planning or code start on a vague request that has not been through this.
 
 Scale to the mode: `vibe` = a 3–5 sentence brief, keep it light; `standard` = the full written brief; `strict` = the full brief plus founder sign-off recorded before build begins.
