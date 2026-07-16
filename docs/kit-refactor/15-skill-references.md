@@ -22,5 +22,12 @@ Các con số/thứ hạng đến từ nguồn **uy tín** (Google eng-practices
 ## Bằng chứng
 Reference emit sang `.claude/` + `.agents/` (progressive disclosure) · golden regenerate · `doctor` 0 error/0 warning · 106/106 test.
 
-## Bước sau (nếu nhân rộng)
-Cùng cách cho `security-review` (OWASP sâu + threat modeling), `test-design` (boundary-value/equivalence/property-based), `refactor` (catalog Fowler + characterization test). Mỗi cái: deep-research → `references/` có nguồn → siết SKILL.md. Nếu là skill T3/T4 thì nhớ cập nhật contentHash (T0 không cần).
+## Đã nhân rộng (4 skill)
+- ✅ `code-review` → `references/review-guide.md` (deep-research; verify chưa hoàn tất do session-limit).
+- ✅ `security-review` → `references/security-guide.md` — STRIDE + OWASP Top 10 2021 + CWE Top 25 + ASVS.
+- ✅ `test-design` → `references/test-guide.md` — equivalence/boundary/decision-table/state/pairwise/property-based + test pyramid + coverage caveat (ISTQB, Myers, NIST, Hypothesis, Fowler).
+- ✅ `refactor` → `references/refactor-guide.md` — "small steps under green tests", characterization tests, smell→refactoring catalog (Fowler, Feathers).
+
+3 cái sau **ground trực tiếp vào nguồn kinh điển có trích URL** (không chạy lại deep-research trong lúc verify-layer kẹt session-limit + để tiết kiệm ~1.7M token). Mỗi reference ghi rõ caveat verify. Khi hết session-limit: chạy 1 lượt deep-research verify đối kháng cho cả 4 để nâng "có nguồn" → "đã verify".
+
+Skill T0 nên không cần contentHash; nếu sau này pin T3/T4 thì cập nhật hash sau khi thêm references.
