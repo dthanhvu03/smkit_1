@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.10] — 2026-07-17
+
+### Added
+- **Data-structure & algorithm coaching in the `code-craft` rule.** The agent now gets concrete guidance while writing code — match the container to the access pattern (`Map`/`Set` for keyed look-ups instead of an O(n) `.find()`/`.includes()` scan inside a loop, the usual accidental O(n²)), index one side and do a single pass to join two collections, hoist loop-invariant work, and choose the right approach over micro-tuning — balanced with a YAGNI reminder not to over-engineer small, bounded data. It's path-scoped (loads only when touching code), so it adds nothing to the always-on token budget. The `code-review` skill already flags performance on the review side.
+
 ## [0.1.9] — 2026-07-17
 
 ### Added
@@ -76,6 +81,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.10]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.7
