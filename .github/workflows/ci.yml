@@ -1,0 +1,38 @@
+name: CI
+
+# Verify the kit on every OS it claims to support — Linux, macOS, Windows — across the
+# Node versions in `engines` (>=18). "Supports macOS" is proven here, not asserted.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: test (${{ matrix.os }} · node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # Zero dependencies — nothing to install. Run the full suite (unit + golden + fuzz
+      # + integrity + gate + settings-merge), then the health check and the guardrail eval.
+      - name: Test suite
+        run: npm test
+
+      - name: Build generated config
+        run: node tools/kitgen/kitgen.mjs build
+
+      - name: Doctor (health check)
+        run: node tools/kitgen/kitgen.mjs doctor
+
+      - name: Guardrail eval (hard-tier scorecard)
+        run: node tools/kitgen/eval.mjs

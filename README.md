@@ -1,5 +1,7 @@
 # Universal Agent Kit
 
+[![CI](https://github.com/dthanhvu03/smkit_1/actions/workflows/ci.yml/badge.svg)](https://github.com/dthanhvu03/smkit_1/actions/workflows/ci.yml) — tested on Linux · macOS · Windows (Node 18/20/22)
+
 **Guardrails and consistency for AI coding — for everyone, on any stack.** Works with Claude Code, Cursor, GitHub Copilot, Windsurf, and the open **AGENTS.md** standard (Codex, Gemini CLI, and any AGENTS.md-aware tool) — all from a single source. Built for vibe coding: you describe what you want in plain language, the kit keeps the AI safe and consistent for you.
 
 ## Why
