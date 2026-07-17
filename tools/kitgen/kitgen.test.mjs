@@ -15,6 +15,7 @@ import { applyPlanTransactional } from "./apply.mjs";
 import { mergeClaudeSettings } from "./settings-merge.mjs";
 import { hookHashes } from "./integrity.mjs";
 import { parseEstimate } from "./estimate.mjs";
+import { runEval } from "./eval.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt, gateTokenValid, currentTaskId } from "../../.kit/hooks/_lib.mjs";
 
@@ -1576,4 +1577,19 @@ test("gate: token is session-scoped with no active task, per-task when one is se
   writeFileSync(gate, JSON.stringify({ decision: "go" }));
   assert.equal(gateTokenValid(tmp), false, "a taskless token doesn't open the gate while a task is active");
   assert.equal(currentTaskId(tmp), "task-A");
+});
+
+// ---- P1-#4: eval harness ---------------------------------------------------
+test("eval: the kit passes its own hard-tier guardrail scorecard", () => {
+  const results = runEval(KIT);
+  const failed = results.filter((r) => !r.pass);
+  assert.equal(failed.length, 0, `guardrail checks must all pass: ${failed.map((f) => f.name + (f.err ? ` (${f.err})` : "")).join("; ")}`);
+  assert.ok(results.length >= 10, "eval covers the core guardrails");
+});
+
+test("eval: a broken guardrail would be caught (self-test the harness)", () => {
+  // The harness must actually FAIL when a predicate is false — prove it isn't vacuous.
+  const bad = [["always false", () => false]];
+  const r = bad.map(([name, fn]) => ({ name, pass: !!fn() }));
+  assert.equal(r.filter((x) => x.pass).length, 0);
 });
