@@ -4,6 +4,14 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.17] — 2026-07-17
+
+### Added
+- **`senior-reasoning` skill — think like a senior, not tick a checklist.** The agent's reasoning in `/ship`, `/discover`, and `/challenge` read shallow (one-line "looks fine" answers) because the skills were procedural checklists. This adds the cognitive forcing functions that separate senior from junior and requires them at every real decision: **challenge the premise**, weigh **2+ options with quantified trade-offs**, trace **second-order effects & blast radius**, name **the non-obvious risk a junior misses**, **steelman** the leading choice and answer it, and state **assumptions · unknowns · confidence**. The rule that makes it bite: every claim needs a *because* and a *so-what* — a section of bare one-liners fails the skill and is redone.
+- Wired into `/ship` (design), `/discover` (the analyst brief), and `/challenge`; `pre-build-critique` now demands each lens finding carry its *why + consequence* (not "looks fine") and adds a steelman step.
+
+> Note: this raises the *depth the kit asks for*; the depth actually delivered still depends on the model and its reasoning effort. On a strong model (e.g. Claude Code) the forcing functions land directly.
+
 ## [0.1.16] — 2026-07-17
 
 ### Fixed
@@ -138,6 +146,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.17]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.17
 [0.1.16]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.16
 [0.1.15]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.15
 [0.1.14]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.14
