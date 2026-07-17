@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.15] — 2026-07-17
+
+### Fixed
+- **No more "smkit: command not found" in a self-contained install.** The default install vendors the kit into the project — there is no global `smkit` on `PATH` — but `init`/`update`'s closing messages and the README implied there was. They now show the exact way to run commands in a self-contained project: `node tools/kitgen/kitgen.mjs <doctor|build|check>` (or `npm i -g @zusem/smkit` for the `smkit` shortcut). A founder following the on-screen instructions no longer hits a dead end.
+
 ## [0.1.14] — 2026-07-17
 
 ### Fixed
@@ -128,6 +133,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.15]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.15
 [0.1.14]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.14
 [0.1.13]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.13
 [0.1.12]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.12

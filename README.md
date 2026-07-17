@@ -64,6 +64,11 @@ CLAUDE.md · .claude/{rules,agents,commands,skills,settings.json} · .cursor/{ru
 
 One CLI (`smkit`) or the equivalent npm scripts:
 
+> **Running commands in an installed project:** the default install is **self-contained**, so
+> there is no global `smkit` on your `PATH`. Inside a project, run kit commands with
+> **`node tools/kitgen/kitgen.mjs <doctor|build|check>`**, or `npx @zusem/smkit <cmd>`, or
+> install the shortcut once with `npm i -g @zusem/smkit`. (`smkit init` itself is run via `npx`.)
+
 ```bash
 smkit init       # npm run init   — set up the kit (zero-question; --interview for the guided Q&A)
 smkit build      # npm run build  — regenerate agent config from the source
