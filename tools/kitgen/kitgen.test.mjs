@@ -385,10 +385,10 @@ test("init: zero-question init detects stack, agents and name from the project",
   assert.match(cfg, /- go/, "go detected from go.mod");
   assert.match(cfg, /- nextjs/, "nextjs detected from package.json next dep");
   assert.match(cfg, /name: "detected-app"/, "name detected from package.json");
-  // agents inferred from .cursor (+ universal agentsmd), NOT the old claude,cursor default
-  assert.match(cfg, /- cursor/);
-  assert.match(cfg, /- agentsmd/);
-  assert.ok(!/- claude\b/.test(cfg), "claude must NOT be assumed when no claude marker is present");
+  // agents = safe baseline (claude + agentsmd, never omitted) PLUS the detected .cursor
+  assert.match(cfg, /- cursor/, "cursor detected from .cursor/");
+  assert.match(cfg, /- claude/, "Claude Code is always in the baseline — never silently dropped");
+  assert.match(cfg, /- agentsmd/, "universal AGENTS.md is always in the baseline");
   // constitution left as a placeholder for /onboard; init points there
   assert.match(readFileSync(join(proj, ".kit", "constitution.md"), "utf8"), /<[^>]+>/, "constitution stays a placeholder");
   assert.match(r.stdout, /\/onboard/, "next-step message routes to /onboard");
@@ -406,6 +406,9 @@ test("init: monorepo detection scopes each stack to its subtree via roots", () =
   assert.match(cfg, /roots:/);
   assert.match(cfg, /go: apps\/api/);
   assert.match(cfg, /nextjs: apps\/web/);
+  // no editor marker present → still gets the baseline so Claude Code + AGENTS.md work
+  assert.match(cfg, /- claude/);
+  assert.match(cfg, /- agentsmd/);
 });
 
 test("dist: doctor flags vendored yaml drift", () => {

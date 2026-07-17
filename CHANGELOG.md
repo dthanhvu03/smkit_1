@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] — 2026-07-17
+
+### Fixed
+- **Zero-question install no longer silently drops Claude Code.** `0.1.5` detection would write only the editors it found a marker for — so a project that had a `.cursor/` folder but no `.claude/` got `agents: [cursor, agentsmd]` and generated **no `.claude/commands/`**, leaving Claude Code with no slash commands and no obvious cause. Detection now keeps a **safe baseline that is never omitted** — `claude` (the primary target) + `agentsmd` (the universal standard) — and only *adds* the other editors it detects (`cursor` / `copilot` / `windsurf`). A pure-Cursor project still gets Claude Code config; nothing is left out without asking. `--agents` still overrides for anyone who wants an exact set.
+
 ## [0.1.5] — 2026-07-17
 
 ### Added
@@ -53,6 +58,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.6]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.6
 [0.1.5]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.4
 [0.1.3]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.3

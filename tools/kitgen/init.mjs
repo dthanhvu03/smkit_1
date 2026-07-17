@@ -69,13 +69,15 @@ function detectStacks() {
   return list;
 }
 function detectAgents() {
-  const a = new Set();
+  // Safe baseline, never omitted: Claude Code (the primary target) + the universal
+  // AGENTS.md standard (read by Codex / Gemini CLI / …). Detection only ADDS the
+  // other editors it finds — so a project that only shows a `.cursor/` marker still
+  // gets Claude Code config instead of silently missing the main tool.
+  const a = new Set(["claude", "agentsmd"]);
   if (existsSync(pp(".cursor"))) a.add("cursor");
   if (existsSync(pp(".github", "copilot-instructions.md")) || existsSync(pp(".github", "instructions"))) a.add("copilot");
   if (existsSync(pp(".windsurf"))) a.add("windsurf");
-  if (existsSync(pp("CLAUDE.md")) || existsSync(pp(".claude"))) a.add("claude");
-  a.add("agentsmd"); // universal base — always emit AGENTS.md
-  return a.size === 1 ? ["claude", "cursor", "agentsmd"] : [...a]; // only agentsmd = nothing detected → broad default
+  return [...a];
 }
 function detectName() {
   try { const n = JSON.parse(readFileSync(pp("package.json"), "utf8")).name; if (n) return String(n); } catch { /* no package.json */ }
