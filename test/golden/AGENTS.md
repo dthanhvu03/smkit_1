@@ -24,6 +24,7 @@ Intent → command:
 
 | What the user is really asking for | Propose | 
 |---|---|
+| First use / the constitution is still placeholders | `/onboard` — read the project & fill setup |
 | Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
 | A small next step, or continue mid-feature | `/start` |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
@@ -37,6 +38,7 @@ Intent → command:
 | Just a question or explanation | no command — answer directly |
 
 Rules of thumb:
+- **Onboard first if the project is unset.** If `.kit/constitution.md` still holds placeholders (`<describe…>`), the kit was installed zero-question — offer `/onboard` before real work so the AI understands the project.
 - **Don't over-serve.** A one-line fix or a plain question does not need `/ship`; offer the lightest path that fits. Reserve the heavy pipeline (and its gates) for real deliveries so the gates keep their meaning.
 - **When in doubt, offer two.** e.g. *"Sounds like a whole feature — run `/ship`? Or just a quick fix with `/start`?"* Let the user pick.
 - **Scale to the mode.** In `vibe`, keep the suggestion to a few words and move; in `standard`/`strict`, name the command and the gates it will run.
@@ -99,6 +101,7 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - `/decide` — Append a technical decision to the Decision Log so future sessions stay consistent.
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
 - `/handoff` — Assemble a plain-language "human-control package" for a delivered piece of work — what was built, proof it works, what it touched and how to undo it, and what the owner must approve — so a non-technical owner can review, sign off, and stay in control. Runs at the end of /ship or on its own.
+- `/onboard` — On first use, have the agent read your codebase and fill in the project's constitution — what it is, who it's for, what it must never do, and its stack — then confirm with you. Turns a zero-question install into an accurate setup without a cold interview.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
 - `/ship` — Take a request from idea to shipped — discovery, critique, design, build, review, QA, and deploy — running the whole team pipeline and pausing only where you must decide. For a whole feature; use /start for a small next step.

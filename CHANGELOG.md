@@ -4,6 +4,17 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] — 2026-07-17
+
+### Added
+- **`/onboard`** — on first run the agent reads the codebase, drafts the constitution (what you build · who uses it · what it must never do), **confirms it with you**, and reconciles the stack (proposing per-folder `roots` for a monorepo) before real work begins. Turns a silent install into an accurate setup without a cold interview. The command-routing rule nudges to `/onboard` while the constitution is still placeholders.
+
+### Changed
+- **`init` asks nothing by default** — a plain `smkit init` now **infers the project instead of interviewing**: it detects the stack(s) (`go.mod` / `package.json`+`next` / `pyproject.toml`), monorepo per-stack roots under `apps|packages|services/*`, the AI tools in use (`.cursor` / `.github` / `.windsurf` / `CLAUDE.md`), and the project name (`package.json`), writes sensible defaults, and leaves the constitution for `/onboard` to fill. Precedence is **flag > detected > default**; `--interview` re-enables the guided Q&A.
+
+### Fixed
+- **Test hygiene** — the test suite leaked one `mkdtemp` copy of the whole kit per scratch dir per run, eventually filling the OS temp dir. Every scratch dir now goes through a tracked helper removed on process exit, so repeated `node --test` runs no longer accumulate. Added detection tests (root · monorepo roots · agents · name); 117/117 pass.
+
 ## [0.1.4] — 2026-07-16
 
 ### Added
@@ -42,6 +53,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.5]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.4
 [0.1.3]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.3
 [0.1.2]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.2

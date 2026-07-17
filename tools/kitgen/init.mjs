@@ -41,11 +41,53 @@ try {
 } catch { profiles = ["generic"]; }
 if (!profiles.length) profiles = ["generic"];
 
+// ---- detection (zero-question default) ------------------------------------
+// A plain `smkit init` asks nothing: it reads the project to infer the stack(s)
+// and which AI tools are in use, writes sensible defaults, and leaves the
+// constitution as a placeholder for `/onboard` to fill (the AI reads the code and
+// confirms with the user). Flags still override; `--interview` re-enables the Q&A.
+const pkgHasNext = (p) => { try { const j = JSON.parse(readFileSync(p, "utf8")); return !!{ ...j.dependencies, ...j.devDependencies }.next; } catch { return false; } };
+function detectStacksAt(base, root) {
+  const out = [];
+  if (existsSync(join(base, "go.mod"))) out.push({ id: "go", root });
+  const pkg = join(base, "package.json");
+  if (existsSync(pkg) && pkgHasNext(pkg)) out.push({ id: "nextjs", root });
+  if (["pyproject.toml", "requirements.txt", "setup.py"].some((f) => existsSync(join(base, f)))) out.push({ id: "python", root });
+  return out;
+}
+function detectStacks() {
+  const found = [...detectStacksAt(PROJECT_DIR, "")];
+  for (const container of ["apps", "packages", "services"]) {
+    try {
+      if (existsSync(pp(container))) {
+        for (const sub of readdirSync(pp(container))) found.push(...detectStacksAt(pp(container, sub), `${container}/${sub}`));
+      }
+    } catch { /* unreadable dir → skip */ }
+  }
+  const seen = new Set(), list = [];
+  for (const s of found) { if (!profiles.includes(s.id)) continue; const k = `${s.id}@${s.root}`; if (!seen.has(k)) { seen.add(k); list.push(s); } }
+  return list;
+}
+function detectAgents() {
+  const a = new Set();
+  if (existsSync(pp(".cursor"))) a.add("cursor");
+  if (existsSync(pp(".github", "copilot-instructions.md")) || existsSync(pp(".github", "instructions"))) a.add("copilot");
+  if (existsSync(pp(".windsurf"))) a.add("windsurf");
+  if (existsSync(pp("CLAUDE.md")) || existsSync(pp(".claude"))) a.add("claude");
+  a.add("agentsmd"); // universal base — always emit AGENTS.md
+  return a.size === 1 ? ["claude", "cursor", "agentsmd"] : [...a]; // only agentsmd = nothing detected → broad default
+}
+function detectName() {
+  try { const n = JSON.parse(readFileSync(pp("package.json"), "utf8")).name; if (n) return String(n); } catch { /* no package.json */ }
+  return PROJECT_DIR.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "My App";
+}
+
 // ---- prompting ------------------------------------------------------------
-const PRESET_KEYS = ["name", "lang", "stack", "mode", "agents", "purpose", "users", "never"];
-// Non-interactive when told to, when any answer was supplied as a flag, or when
-// there's no TTY (CI/pipe) — so a scripted/CI run uses defaults instead of hanging.
-const nonInteractive = YES || DRY || PRESET_KEYS.some((k) => flag(k) !== undefined) || !process.stdin.isTTY;
+// Interview is OFF by default — `smkit init` infers everything from the project and
+// stays silent; `/onboard` confirms + fills the constitution later. `--interview`
+// re-enables the guided Q&A. Also non-interactive under --yes/--dry-run or no TTY.
+const INTERVIEW = has("interview");
+const nonInteractive = !INTERVIEW || YES || DRY || !process.stdin.isTTY;
 let rl;
 async function ask(question, def, choices) {
   const preset = { name: flag("name"), lang: flag("lang"), stack: flag("stack"), mode: flag("mode"),
@@ -83,58 +125,60 @@ const PROMPTS = {
   },
 };
 
-// ---- run ------------------------------------------------------------------
+// ---- gather answers (precedence: flag > detected > default) ---------------
+// Read the project so a zero-question init still writes an accurate config.
+const detStacks0 = detectStacks();
+const defaultStack = profiles.includes("generic") ? "generic" : (profiles[0] || "generic");
+const detStacks = detStacks0.length ? detStacks0 : [{ id: defaultStack, root: "" }];
+const detStackStr = [...new Set(detStacks.map((s) => s.id))].join(",");
+const detAgents = detectAgents();
+
 const answers = {};
-// Ask the language FIRST so the rest of the interview speaks it.
+// Language first (asked only in --interview mode; else defaults to en, /onboard can switch).
 answers.lang = await ask({ key: "lang", q: "Language for instructions? / Ngôn ngữ hướng dẫn?" }, "en", ["en", "vi"]);
 if (!["en", "vi"].includes(answers.lang)) { console.log(`  note: unsupported language "${answers.lang}" — using en`); answers.lang = "en"; }
 const P = PROMPTS[answers.lang] || PROMPTS.en;
-answers.name = await ask({ key: "name", q: P.name }, "My App");
+answers.name = await ask({ key: "name", q: P.name }, detectName());
 answers.purpose = await ask({ key: "purpose", q: P.purpose }, "");
 answers.users = await ask({ key: "users", q: P.users }, "");
 answers.never = await ask({ key: "never", q: P.never }, "");
-// Prefer the neutral "generic" profile; else the first available.
-const defaultStack = profiles.includes("generic") ? "generic" : (profiles[0] || "generic");
-const stackRaw = await ask({ key: "stack", q: P.stack }, defaultStack, profiles);
+const stackRaw = await ask({ key: "stack", q: P.stack }, detStackStr, profiles);
 
-// Parse + validate the stack answer now (we need it to ask per-stack folders): accept
-// a comma-separated list (full-stack), keep only known profiles, and fall back to the
-// default rather than writing an invalid config — so a typo like "go , nextjs" can no
-// longer fail at build time.
+// Parse + validate the stack answer: comma-separated list, keep only known profiles,
+// dedupe, fall back to the default — so a typo can't write an invalid config.
 let stacks = String(stackRaw).split(",").map((s) => s.trim()).filter(Boolean);
 const unknownStacks = stacks.filter((s) => !profiles.includes(s));
 if (unknownStacks.length) console.log(`  note: ignoring unknown stack(s): ${unknownStacks.join(", ")}  (valid: ${profiles.join(" / ")})`);
-stacks = stacks.filter((s) => profiles.includes(s));
+stacks = [...new Set(stacks.filter((s) => profiles.includes(s)))];
 if (!stacks.length) stacks = [defaultStack];
-stacks = [...new Set(stacks)];                // drop accidental duplicates (e.g. go,go)
 
-// Per-stack root folder (monorepo): each stack's conventions get scoped to its subtree.
-// Scripted: --roots "go=apps/api,nextjs=apps/web". Interactive: ask one folder per stack
-// only when there are several; blank = repo-wide (unchanged behavior). Only accept a
-// safe, relative path segment (no spaces/colons/leading "..") so the config stays valid.
+// Per-stack root folder (monorepo): seed from detection, override with --roots, or ask
+// each in --interview mode. Only accept a safe relative path segment.
 const SAFE_ROOT = /^\w[\w./-]*$/;
 const normRoot = (v) => {
   const s = String(v).trim().replace(/^\.\/+/, "").replace(/\/+$/, "");
   return SAFE_ROOT.test(s) ? s : "";
 };
 const roots = {};
+for (const s of detStacks) if (s.root && stacks.includes(s.id)) roots[s.id] = s.root;   // detected roots
 const rootsFlag = flag("roots");
 if (rootsFlag) {
+  for (const k of Object.keys(roots)) delete roots[k];   // an explicit --roots is authoritative
   for (const pair of String(rootsFlag).split(",")) {
     const [k, v] = pair.split("=").map((x) => (x || "").trim());
     if (!k || !v || !stacks.includes(k)) continue;
     const nr = normRoot(v);
     if (nr) roots[k] = nr; else console.log(`  note: ignoring invalid folder for "${k}": ${v}`);
   }
-} else if (stacks.length > 1) {
+} else if (INTERVIEW && stacks.length > 1) {
   for (const s of stacks) {
-    const r = normRoot(await ask({ key: `__root_${s}`, q: `${P.root} — ${s}` }, ""));
-    if (r) roots[s] = r;
+    const r = normRoot(await ask({ key: `__root_${s}`, q: `${P.root} — ${s}` }, roots[s] || ""));
+    if (r) roots[s] = r; else delete roots[s];
   }
 }
 
 answers.mode = await ask({ key: "mode", q: P.mode }, "vibe", ["vibe", "standard", "strict"]);
-answers.agents = await ask({ key: "agents", q: P.agents }, "claude,cursor", KNOWN_AGENTS);
+answers.agents = await ask({ key: "agents", q: P.agents }, detAgents.join(","), KNOWN_AGENTS);
 if (rl) rl.close();
 
 answers.stack = stacks;                       // internally always an array
@@ -299,11 +343,11 @@ const r = spawnSync(process.execPath, [kp("tools", "kitgen", "kitgen.mjs"), "bui
 });
 if (r.error) { console.error(`\nBuild failed to start: ${r.error.message}`); process.exit(1); }
 if (r.status !== 0) { console.error(`\nBuild failed (${r.status === null ? "signal " + r.signal : "exit " + r.status}).`); process.exit(r.status || 1); }
-if (constitutionWritten && (!answers.purpose || !answers.users || !answers.never)) {
-  const msg = answers.lang === "vi"
-    ? "Lưu ý: constitution còn chỗ để trống — hãy sửa .kit/constitution.md (dự án · người dùng · điều KHÔNG được làm). AI đọc nó mỗi phiên."
-    : "Heads-up: your constitution has placeholders — edit .kit/constitution.md (what you build · who uses it · what it must never do). The AI reads it every session.";
-  console.log(`\n${msg}`);
-}
-console.log(`\nDone. Open your AI tool and start building "${answers.name}". Run \`node tools/kitgen/kitgen.mjs check\` in CI.`);
+const needsOnboard = constitutionWritten && (!answers.purpose || !answers.users || !answers.never);
+const nextStep = needsOnboard
+  ? (answers.lang === "vi"
+      ? `Bước tiếp: mở AI tool rồi chạy /onboard — em sẽ đọc dự án "${answers.name}", điền constitution (làm gì · cho ai · điều cấm) để anh xác nhận.`
+      : `Next: open your AI tool and run /onboard — it reads "${answers.name}" and fills the constitution (what you build · who uses it · what it must never do) for you to confirm.`)
+  : `Open your AI tool and start building "${answers.name}".`;
+console.log(`\nDone. ${nextStep}\nRun \`node tools/kitgen/kitgen.mjs check\` in CI.`);
 process.exit(0);

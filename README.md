@@ -94,6 +94,7 @@ and rebuilds. If you'd edited `engine/` or `profiles/` in place, re-apply those 
 The generated config adds slash commands you run *while building* — the workflow, from a fuzzy idea to shipped code:
 
 ```
+/onboard     first run — the AI reads your project and fills the setup (constitution, stack), then confirms
 /ship        deliver a whole feature A→Z — discovery → build → review → deploy, in one orchestrated run
 /discover    fuzzy idea → a founder-ready decision (problem, options, smallest slice)
 /challenge   stress-test a change through 5 lenses before coding (a hook enforces this in standard/strict)

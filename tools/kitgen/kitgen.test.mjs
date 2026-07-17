@@ -19,6 +19,13 @@ const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLDEN = join(KIT, "test", "golden");
 const UPDATE = process.env.UPDATE_GOLDEN === "1";
 
+// Every test scratch dir goes through mkTmp so it is tracked and removed on
+// exit — otherwise repeated runs leak mkdtemp copies of the whole kit into the
+// OS temp dir and eventually fill the disk.
+const TMP_DIRS = [];
+const mkTmp = (prefix) => { const d = mkdtempSync(join(tmpdir(), prefix)); TMP_DIRS.push(d); return d; };
+process.on("exit", () => { for (const d of TMP_DIRS) { try { rmSync(d, { recursive: true, force: true }); } catch {} } });
+
 function walk(dir, base = dir) {
   const out = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -120,7 +127,7 @@ test("critique gate: a valid token opens the gate; vibe never blocks (reminds)",
 
 // ---- golden-file snapshot of full generated output ------------------------
 test("golden: generated output set matches committed golden", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kitgen-"));
+  const tmp = mkTmp("kitgen-");
   cpSync(join(KIT, "test", "fixture", "kit.config.yaml"), join(tmp, "kit.config.yaml"));
   const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "kitgen.mjs"), "build"],
     { cwd: tmp, env: { ...process.env, CLAUDE_PROJECT_DIR: tmp }, encoding: "utf8" });
@@ -158,7 +165,7 @@ test("golden: AGENTS.md exists and carries hard rules + role index", () => {
 // Copy the runtime kit into a temp dir so KIT-source checks (paths/hooks/rules/
 // skills/roles) can be mutated without touching the real repo.
 function copyKit() {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-doctor-"));
+  const tmp = mkTmp("kit-doctor-");
   for (const d of ["engine", "profiles", ".kit", "tools"]) cpSync(join(KIT, d), join(tmp, d), { recursive: true });
   cpSync(join(KIT, "test", "fixture", "kit.config.yaml"), join(tmp, "kit.config.yaml"));
   return tmp;
@@ -348,7 +355,7 @@ test("guard: PowerShell encoded command is high-risk (warn in vibe, block in str
 
 // ---- distribution: self-contained install (P1) ----------------------------
 test("dist: init into an empty project → self-contained + hook runs without tools/", () => {
-  const proj = mkdtempSync(join(tmpdir(), "kit-proj-"));
+  const proj = mkTmp("kit-proj-");
   const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "init.mjs"),
     "--name", "Proj", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude"],
     { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
@@ -361,6 +368,44 @@ test("dist: init into an empty project → self-contained + hook runs without to
   const g = spawnSync(process.execPath, [join(proj, ".kit", "hooks", "guard-shell.mjs")],
     { input: '{"tool_input":{"command":"git push --force"}}', env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
   assert.equal(g.status, 2, "self-contained hook should still block");
+});
+
+// ---- zero-question init: detect stack / agents / name from the project -----
+const runInit = (proj, ...args) => spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "init.mjs"), ...args],
+  { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+
+test("init: zero-question init detects stack, agents and name from the project", () => {
+  const proj = mkTmp("kit-detect-");
+  writeFileSync(join(proj, "go.mod"), "module example.com/api\n");
+  writeFileSync(join(proj, "package.json"), JSON.stringify({ name: "detected-app", dependencies: { next: "14.0.0" } }));
+  mkdirSync(join(proj, ".cursor"));
+  const r = runInit(proj);                         // no flags → infer everything, ask nothing
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const cfg = readFileSync(join(proj, "kit.config.yaml"), "utf8");
+  assert.match(cfg, /- go/, "go detected from go.mod");
+  assert.match(cfg, /- nextjs/, "nextjs detected from package.json next dep");
+  assert.match(cfg, /name: "detected-app"/, "name detected from package.json");
+  // agents inferred from .cursor (+ universal agentsmd), NOT the old claude,cursor default
+  assert.match(cfg, /- cursor/);
+  assert.match(cfg, /- agentsmd/);
+  assert.ok(!/- claude\b/.test(cfg), "claude must NOT be assumed when no claude marker is present");
+  // constitution left as a placeholder for /onboard; init points there
+  assert.match(readFileSync(join(proj, ".kit", "constitution.md"), "utf8"), /<[^>]+>/, "constitution stays a placeholder");
+  assert.match(r.stdout, /\/onboard/, "next-step message routes to /onboard");
+});
+
+test("init: monorepo detection scopes each stack to its subtree via roots", () => {
+  const proj = mkTmp("kit-detect-mono-");
+  mkdirSync(join(proj, "apps", "api"), { recursive: true });
+  mkdirSync(join(proj, "apps", "web"), { recursive: true });
+  writeFileSync(join(proj, "apps", "api", "go.mod"), "module x\n");
+  writeFileSync(join(proj, "apps", "web", "package.json"), JSON.stringify({ dependencies: { next: "14" } }));
+  const r = runInit(proj);
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const cfg = readFileSync(join(proj, "kit.config.yaml"), "utf8");
+  assert.match(cfg, /roots:/);
+  assert.match(cfg, /go: apps\/api/);
+  assert.match(cfg, /nextjs: apps\/web/);
 });
 
 test("dist: doctor flags vendored yaml drift", () => {
@@ -792,7 +837,7 @@ test("rule: enforcement.type=hook without a real hook file is rejected", () => {
 
 // ---- guard v2 audit log (E2E) ---------------------------------------------
 test("guard v2: every decision appended to .kit/audit.log", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-audit-"));
+  const tmp = mkTmp("kit-audit-");
   mkdirSync(join(tmp, ".kit"), { recursive: true });
   const r = spawnSync(process.execPath, [join(KIT, ".kit", "hooks", "guard-shell.mjs")],
     { input: '{"tool_input":{"command":"git push --force"}}', env: { ...process.env, CLAUDE_PROJECT_DIR: tmp }, encoding: "utf8" });
@@ -828,7 +873,7 @@ test("profileList: normalizes a string, a list, empties, and duplicates → a cl
   assert.deepEqual(profileList({ stack: { profile: ["nextjs", "nextjs", "go"] } }), ["nextjs", "go"]); // dedupes
 });
 test("multi-stack: a duplicated profile no longer crashes the build (invariant/rule id clash)", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-dup-"));
+  const tmp = mkTmp("kit-dup-");
   writeFileSync(join(tmp, "kit.config.yaml"),
     'version: 2\nproject:\n  name: "D"\n  language: en\nmode: vibe\nstack:\n  profile:\n    - nextjs\n    - nextjs\n  test: ""\nagents:\n  - claude\noutDir: out\n');
   const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "kitgen.mjs"), "build"],
@@ -858,7 +903,7 @@ test("multi-stack: a per-stack root scopes that profile's conventions to its sub
   assert.ok(bare.paths.includes("**/*.go"), `unscoped stays repo-wide: ${bare.paths}`);
 });
 test("multi-stack: a profile list emits every profile's conventions", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-multi-"));
+  const tmp = mkTmp("kit-multi-");
   writeFileSync(join(tmp, "kit.config.yaml"),
     'version: 2\nproject:\n  name: "FS"\n  language: en\nmode: vibe\nstack:\n  profile:\n    - go\n    - nextjs\n  test: ""\nagents:\n  - claude\noutDir: out\n');
   const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "kitgen.mjs"), "build"],
@@ -934,7 +979,7 @@ test("manifest: hand-edited generated file is protected without --force, replace
 
 // ---- P0.3: transactional generation (rollback on mid-write failure) -------
 test("transaction: a mid-write failure rolls back — earlier overwrite is restored", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-tx-"));
+  const tmp = mkTmp("kit-tx-");
   const okAbs = join(tmp, "a.txt");
   writeFileSync(okAbs, "ORIGINAL");
   // A plain file used as a directory component makes the next write fail (ENOTDIR).
@@ -952,7 +997,7 @@ test("transaction: a mid-write failure rolls back — earlier overwrite is resto
 });
 
 test("transaction: rollback removes files that were newly created before the failure", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "kit-tx2-"));
+  const tmp = mkTmp("kit-tx2-");
   const newAbs = join(tmp, "fresh.txt"); // does not exist yet → created new
   const blocker = join(tmp, "b");
   writeFileSync(blocker, "x");
