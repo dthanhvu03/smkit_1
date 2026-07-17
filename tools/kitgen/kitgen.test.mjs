@@ -14,6 +14,7 @@ import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
 import { mergeClaudeSettings } from "./settings-merge.mjs";
 import { hookHashes } from "./integrity.mjs";
+import { parseEstimate } from "./estimate.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
@@ -1531,4 +1532,25 @@ test("skill rubric: a thin skill (no workflow/output/bar) is flagged SKILL_QUALI
   assert.match(hit[0], /workflow/i);
   assert.match(hit[0], /output/i);
   assert.match(hit[0], /quality bar/i);
+});
+
+// ---- P1-#2: machine-readable estimate --------------------------------------
+test("estimate: a justified estimate parses clean; bad values are flagged", () => {
+  const good = "```yaml\nestimate:\n  complexity: M\n  effort_days: 2\n  confidence: 0.7\n  risk: medium\n  basis: \"two endpoints + a migration, no unknowns\"\n  deadline: none\n```";
+  assert.deepEqual(parseEstimate(good).warnings, [], "a complete, justified estimate has no warnings");
+
+  const bad = "```yaml\nestimate:\n  complexity: XL\n  effort_days: 20\n  confidence: 0.2\n  risk: extreme\n  basis: \"<why this size>\"\n```";
+  const w = parseEstimate(bad).warnings.join(" | ");
+  assert.match(w, /XL — slice/);
+  assert.match(w, /low confidence/);
+  assert.match(w, /risk must be one of/);
+  assert.match(w, /basis is empty/);
+});
+
+test("estimate: missing block is reported, and the shipped task template is a valid example", () => {
+  assert.match(parseEstimate("# a task with no estimate").warnings.join(""), /no machine-readable estimate/);
+  const tpl = readFileSync(join(KIT, ".kit", "task.template.md"), "utf8");
+  const { estimate, warnings } = parseEstimate(tpl);
+  assert.ok(estimate && estimate.complexity === "M", "template carries a parseable estimate block");
+  assert.deepEqual(warnings, [], `template estimate should validate clean: ${warnings.join(" | ")}`);
 });

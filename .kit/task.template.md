@@ -27,6 +27,20 @@
 - [ ] <criterion 1>
 - [ ] <criterion 2>
 
+## Estimate (machine-readable)
+<!-- An honest, JUSTIFIED size — a number with no basis is a guess. Fill `basis` with the
+     real reasons. complexity: S|M|L|XL (XL → slice smaller before starting). confidence: 0..1
+     (low = say so, cut scope). risk: low|medium|high. Tools parse the yaml block below. -->
+```yaml
+estimate:
+  complexity: M
+  effort_days: 2
+  confidence: 0.6
+  risk: medium
+  basis: "why this size — the concrete reasons, not a vibe"
+  deadline: none
+```
+
 ## Impact map (what it touches)
 <!-- Run the impact-map skill. List the files/functions this reads & writes,
      the callers/jobs/events/triggers, and the tests affected — so nothing breaks silently. -->
