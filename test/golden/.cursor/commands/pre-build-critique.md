@@ -33,6 +33,6 @@ Challenge a change *before* it is built — this is the checkpoint that stops th
 ```
 Then write `.kit/state/gate.json`, for example:
 ```json
-{ "task": "add login rate-limit", "decision": "go", "highRisk": ["security & data"], "note": "cap at 5/min, reversible config" }
+{ "task": "login-rate-limit", "decision": "go", "highRisk": ["security & data"], "note": "cap at 5/min, reversible config" }
 ```
-In `standard`/`strict` mode a Claude hook blocks the first code write of the session until this token exists; in `vibe` it only reminds. An empty **Verdict** fails the evidence gate.
+Set `task` to the **active task id** (the one in `.kit/state/current-task`); the gate is **per-task** — a token recorded for one task does not open the gate for a different one, so each new task is critiqued on its own. In `standard`/`strict` mode a Claude hook blocks the first code write for the task until this token exists; in `vibe` it only reminds. An empty **Verdict** fails the evidence gate.

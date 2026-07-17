@@ -334,8 +334,9 @@ export function critiqueGateDecision({ relPath, mode = "vibe", hasToken = false 
       `Pre-build critique required in ${mode} mode. Before writing code for a new task, challenge it ` +
       "through the lenses (correctness · security & data · consistency · simplicity/necessity · " +
       "reversibility) — run /challenge or the pre-build-critique skill — then record the verdict to " +
-      ".kit/state/gate.json (a JSON object with a non-empty \"decision\"). This runs once per session; " +
-      "edits flow after it. Docs, .kit, and config paths are never gated.",
+      ".kit/state/gate.json (a JSON object with a non-empty \"decision\", and the active task id in " +
+      "\"task\" if you use /task). This runs once per task — or once per session if no task is active — " +
+      "and edits flow after it. Docs, .kit, and config paths are never gated.",
   };
 }
 
@@ -343,4 +344,25 @@ export function critiqueGateDecision({ relPath, mode = "vibe", hasToken = false 
 export function auditLog(entry, projDir = projectDir) {
   try { appendFileSync(join(projDir, ".kit", "audit.log"), JSON.stringify(entry) + "\n"); }
   catch { /* best-effort */ }
+}
+
+// The active task id, if the project uses /task (written to .kit/state/current-task).
+export function currentTaskId(projDir = projectDir) {
+  try { return readFileSync(join(projDir, ".kit", "state", "current-task"), "utf8").trim() || null; }
+  catch { return null; }
+}
+
+// Whether a valid pre-build critique token exists for the work about to happen.
+// Backward-compatible: with NO active task, this is the old session-scoped check (a
+// gate.json with a non-empty `decision`). With an active task, the token must have been
+// recorded FOR THAT task (`task` field matches) — so switching to a new task re-opens the
+// gate instead of coasting on the previous task's critique.
+export function gateTokenValid(projDir = projectDir) {
+  let t;
+  try { t = JSON.parse(readFileSync(join(projDir, ".kit", "state", "gate.json"), "utf8")); }
+  catch { return false; }
+  if (!(t && typeof t.decision === "string" && t.decision.trim())) return false;
+  const task = currentTaskId(projDir);
+  if (task && String(t.task ?? "").trim() !== task) return false;
+  return true;
 }

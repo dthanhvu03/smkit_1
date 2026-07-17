@@ -9,7 +9,7 @@ argument-hint: "[task id] [short title]"
 
 Open a **task record** and prepare it *before* touching code. This is how "each piece of work" gets a scope, a definition of done, and a map of what it touches — so nothing is built blind, and the work is resumable next session. Scale the ceremony to the mode; a trivial one-line fix does not need a task file.
 
-1. **Create the file.** Copy `.kit/task.template.md` to `.kit/tasks/<id>.md`. Use your tracker's id if you have one (Jira / GitHub issue) so the PR title `[TASK-<id>]` links back; otherwise a short slug (`login-rate-limit`).
+1. **Create the file.** Copy `.kit/task.template.md` to `.kit/tasks/<id>.md`. Use your tracker's id if you have one (Jira / GitHub issue) so the PR title `[TASK-<id>]` links back; otherwise a short slug (`login-rate-limit`). Mark it the **active task** — write the id to `.kit/state/current-task` — so the critique gate scopes to *this* task: switching tasks re-opens the gate instead of coasting on the previous task's critique.
 2. **Scope.** Fill **In** / **Out** — what this task delivers and what it explicitly does not (so it doesn't quietly grow). This is the output of `/discover`.
 3. **Acceptance criteria.** Write the concrete, checkable conditions that mean "done." Nothing merges until these are met (the evidence gate).
 4. **Impact map.** Run the **impact-map** skill and paste the result — the files/tables/endpoints this reads and writes, every caller / job / event that depends on them, and the tests affected. This answers *"which files are in play"* before editing.

@@ -16,7 +16,7 @@ import { mergeClaudeSettings } from "./settings-merge.mjs";
 import { hookHashes } from "./integrity.mjs";
 import { parseEstimate } from "./estimate.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
-import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
+import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt, gateTokenValid, currentTaskId } from "../../.kit/hooks/_lib.mjs";
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GOLDEN = join(KIT, "test", "golden");
@@ -1553,4 +1553,27 @@ test("estimate: missing block is reported, and the shipped task template is a va
   const { estimate, warnings } = parseEstimate(tpl);
   assert.ok(estimate && estimate.complexity === "M", "template carries a parseable estimate block");
   assert.deepEqual(warnings, [], `template estimate should validate clean: ${warnings.join(" | ")}`);
+});
+
+// ---- P1-#1: per-task critique gate ----------------------------------------
+test("gate: token is session-scoped with no active task, per-task when one is set", () => {
+  const tmp = mkTmp("kit-gate-");
+  mkdirSync(join(tmp, ".kit", "state"), { recursive: true });
+  const gate = join(tmp, ".kit", "state", "gate.json");
+  const curTask = join(tmp, ".kit", "state", "current-task");
+
+  assert.equal(gateTokenValid(tmp), false, "no token → invalid");
+  writeFileSync(gate, JSON.stringify({ decision: "go" }));
+  assert.equal(gateTokenValid(tmp), true, "decision present, no active task → valid (session scope, backward-compatible)");
+  writeFileSync(gate, JSON.stringify({ decision: "   " }));
+  assert.equal(gateTokenValid(tmp), false, "empty decision → invalid");
+
+  writeFileSync(curTask, "task-A\n");
+  writeFileSync(gate, JSON.stringify({ decision: "go", task: "task-A" }));
+  assert.equal(gateTokenValid(tmp), true, "token for the active task opens the gate");
+  writeFileSync(gate, JSON.stringify({ decision: "go", task: "task-B" }));
+  assert.equal(gateTokenValid(tmp), false, "token for a DIFFERENT task must not open the gate");
+  writeFileSync(gate, JSON.stringify({ decision: "go" }));
+  assert.equal(gateTokenValid(tmp), false, "a taskless token doesn't open the gate while a task is active");
+  assert.equal(currentTaskId(tmp), "task-A");
 });

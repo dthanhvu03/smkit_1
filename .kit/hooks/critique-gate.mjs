@@ -5,18 +5,8 @@
 // config, and generated agent config are never gated. Fails OPEN on any error so a bug
 // never bricks the ability to edit. Enforcement is Claude-only (runs via settings.json);
 // on other targets the matching rule is guidance, like every hook.
-import { readFileSync } from "node:fs";
-import { join, relative, isAbsolute } from "node:path";
-import { projectDir, loadConfig, critiqueGateDecision, auditLog } from "./_lib.mjs";
-
-// A token is valid only if it carries a non-empty `decision` — proof a real critique
-// happened, not an empty file. Session-start removes it, so each session needs one pass.
-function tokenValid() {
-  try {
-    const t = JSON.parse(readFileSync(join(projectDir, ".kit", "state", "gate.json"), "utf8"));
-    return !!(t && typeof t.decision === "string" && t.decision.trim());
-  } catch { return false; }
-}
+import { relative, isAbsolute } from "node:path";
+import { projectDir, loadConfig, critiqueGateDecision, auditLog, gateTokenValid } from "./_lib.mjs";
 
 function relPathOf(fp) {
   if (!fp) return "";
@@ -36,7 +26,7 @@ process.stdin.on("end", async () => {
     const ti = input.tool_input || {};
     relPath = relPathOf(ti.file_path || ti.path || "");
     mode = (await loadConfig()).mode || "vibe";
-    ({ decision, reason } = critiqueGateDecision({ relPath, mode, hasToken: tokenValid() }));
+    ({ decision, reason } = critiqueGateDecision({ relPath, mode, hasToken: gateTokenValid() }));
   } catch { decision = "allow"; reason = ""; } // fail open
 
   auditLog({ ts: Date.now(), gate: "critique", mode, decision, reason, path: relPath });
