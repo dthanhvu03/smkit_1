@@ -34,6 +34,7 @@ Intent → command:
 | Look at a diff / code without building | `/review` |
 | Check the project for inconsistency / drift | `/checkup` |
 | Record a decision that was made | `/decide` |
+| Something broke / a bug shipped — learn from it | `/postmortem` |
 | Hand finished work back to the owner to review / approve | `/handoff` |
 | Just a question or explanation | no command — answer directly |
 
@@ -103,6 +104,7 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - `/discover` — Start here when the idea is still fuzzy. Reframes the request as a problem, weighs options, and produces a founder-ready decision brief BEFORE any planning or code.
 - `/handoff` — Assemble a plain-language "human-control package" for a delivered piece of work — what was built, proof it works, what it touched and how to undo it, and what the owner must approve — so a non-technical owner can review, sign off, and stay in control. Runs at the end of /ship or on its own.
 - `/onboard` — On first use, have the agent read your codebase and fill in the project's constitution — what it is, who it's for, what it must never do, and its stack — then confirm with you. Turns a zero-question install into an accurate setup without a cold interview.
+- `/postmortem` — After something broke in production or a bug shipped, run a blameless postmortem — what happened, the real root cause, and the concrete change that stops the whole class of it from recurring — then record it and wire the prevention in.
 - `/review` — Review the current changes for correctness and consistency with the recorded decisions before finishing.
 - `/roundtable` — Get the relevant roles to debate a non-trivial change and converge on a decision BEFORE building — bounded rounds, then converge or escalate to you. Not for small fixes.
 - `/ship` — Take a request from idea to shipped — discovery, critique, design, build, review, QA, and deploy — running the whole team pipeline and pausing only where you must decide. For a whole feature; use /start for a small next step.
