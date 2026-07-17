@@ -1629,3 +1629,33 @@ test("gitignore: never ignores migration *.sql (source); does ignore backups/dum
   assert.match(gi, /\.kit\/state\//, "kit runtime state must be ignored");
   assert.match(gi, /\.env/, "secrets must be ignored");
 });
+
+// ---- 0.1.18: team support -------------------------------------------------
+test("team: init writes .gitattributes (LF) + kit-check CI, never clobbering", () => {
+  const proj = mkTmp("kit-team-");
+  assert.equal(runInit(proj, "--name", "T", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude").status, 0);
+  const ga = readFileSync(join(proj, ".gitattributes"), "utf8");
+  assert.match(ga, /eol=lf/, "pins LF for cross-OS integrity");
+  assert.match(ga, /linguist-generated/, "marks generated config");
+  assert.match(readFileSync(join(proj, ".github", "workflows", "kit-check.yml"), "utf8"), /kitgen\.mjs check/, "CI checks sync");
+
+  const proj2 = mkTmp("kit-team2-");
+  mkdirSync(join(proj2, ".github", "workflows"), { recursive: true });
+  writeFileSync(join(proj2, ".gitattributes"), "MINE\n");
+  writeFileSync(join(proj2, ".github", "workflows", "kit-check.yml"), "MINE-CI\n");
+  runInit(proj2, "--name", "T2", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude");
+  assert.equal(readFileSync(join(proj2, ".gitattributes"), "utf8"), "MINE\n", "existing .gitattributes kept");
+  assert.equal(readFileSync(join(proj2, ".github", "workflows", "kit-check.yml"), "utf8"), "MINE-CI\n", "existing CI kept");
+});
+
+test("team: session-start injects per-file decisions from .kit/decisions/", () => {
+  const proj = mkTmp("kit-adr-");
+  mkdirSync(join(proj, ".kit", "decisions"), { recursive: true });
+  writeFileSync(join(proj, ".kit", "constitution.md"), "# C\n");
+  writeFileSync(join(proj, ".kit", "decisions", "2026-07-17-use-pgx.md"), "## Use pgx\n- Decision: pgx not ORM\n");
+  const r = spawnSync(process.execPath, [join(KIT, ".kit", "hooks", "session-start.mjs")],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /DECISION RECORDS/, "per-file ADRs are injected");
+  assert.match(ctx, /pgx not ORM/);
+});

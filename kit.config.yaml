@@ -7,7 +7,7 @@ project:
   name: "My App"
   language: en          # en | vi
 
-mode: vibe              # vibe | standard | strict
+mode: strict              # vibe | standard | strict
 
 stack:
   profile: generic      # generic | go | nextjs | python  (or a list for full-stack, e.g. [go, nextjs])

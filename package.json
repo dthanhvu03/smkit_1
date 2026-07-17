@@ -1,6 +1,6 @@
 {
   "name": "@zusem/smkit",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Guardrails and consistency for AI coding agents — for everyone, on any stack. One source generates config for Claude Code, Cursor, Copilot, Windsurf, and the AGENTS.md standard.",
   "type": "module",
   "publishConfig": {

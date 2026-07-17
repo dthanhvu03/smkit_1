@@ -4,6 +4,14 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.18] — 2026-07-17
+
+### Added — team / multi-person support
+- **`init` writes a `.gitattributes`** pinning text files to LF. Without it, a Windows checkout on a mixed Win/macOS team rewrites the vendored hooks to CRLF, which trips the integrity check (`HOOKS_INTEGRITY_MISMATCH`) and floods reviews with line-ending diffs. Also marks generated config as `linguist-generated`. (Never clobbers an existing file.)
+- **`init` writes a starter `kit-check` CI workflow** (`.github/workflows/kit-check.yml`) — fails a PR if the committed agent config drifted from the source (`smkit check`) and runs `doctor`, so a team stays on one version and in sync. (Never clobbers.)
+- **Per-file decision records for teams.** A single append-only `.kit/decisions.md` collides when two branches record decisions; teams can now use one file per decision under `.kit/decisions/` — `session-start` injects both `.kit/decisions.md` and every `.kit/decisions/*.md` (most recent, bounded), and `/decide` documents the option.
+- **README "Working as a team" section** — what's committed vs local, rebuild-after-merge for generated files, cross-OS safety, approvers, and the feature-branch/PR flow.
+
 ## [0.1.17] — 2026-07-17
 
 ### Added
@@ -146,6 +154,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.18]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.18
 [0.1.17]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.17
 [0.1.16]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.16
 [0.1.15]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.15

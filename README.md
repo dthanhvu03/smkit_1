@@ -122,6 +122,18 @@ tools/kitgen/ .kit/hooks/` + templates + manifest + `kit.config.yaml`). It **nev
 own content — `.kit/constitution.md`, `.kit/decisions.md`, `.kit/tasks/`. Add `--yes` to skip the
 confirmation prompt.
 
+### Working as a team
+
+The kit is built for shared repos. What's committed vs local, and the few rules that keep a team smooth:
+
+- **Everyone on the same kit version.** The vendored source (`engine/ profiles/ tools/ .kit/hooks/`) and `.kit/.smkit-version` are committed, so the whole team runs identical guardrails. When one person runs `smkit update`, they commit the refreshed source and everyone pulls it. The generated **`kit-check`** CI (created by `init`) fails a PR if the committed config drifted from the source — that's what keeps the team in sync.
+- **Generated config is committed, but it's *generated*.** `.claude/ .cursor/ AGENTS.md CLAUDE.md …` are checked in so the kit works without a build step. On a merge conflict in those, **don't hand-edit — rebuild** (`smkit build`) after merging the source. The generated `.gitattributes` marks them so reviews collapse the diff.
+- **Cross-OS (Windows + macOS) is safe.** `init` writes a `.gitattributes` that pins text files to LF, so a Windows checkout can't rewrite the hooks to CRLF (which would trip the integrity check). Don't remove it on a mixed-OS team.
+- **Per-person state is local.** Gate tokens (`.kit/state/`), the build manifest, `audit.log`, and `.smkit-backup/` are git-ignored — each dev's critique gate and audit trail are their own, no clashes.
+- **Decisions on a busy team:** a single append-only `.kit/decisions.md` collides when two branches both record a decision. Switch to **one file per decision** under `.kit/decisions/` (`/decide` explains it) — session-start reads both, so there are no shared-line conflicts.
+- **Approvals map to real people.** Fill `approvers` in `kit.config.yaml` (schema change · prod deploy · data delete) with the teammates who must sign off; `/ship` blocks on them for high-stakes changes.
+- **Feature branches + PRs.** `/ship` works on a `feature/*` branch and opens a small, reviewed PR (no self-merge) — the `git-workflow` skill has the full model.
+
 ### Inside your AI tool
 
 The generated config adds slash commands you run *while building* — the workflow, from a fuzzy idea to shipped code:
