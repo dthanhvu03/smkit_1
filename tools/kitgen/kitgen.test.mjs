@@ -411,6 +411,58 @@ test("init: monorepo detection scopes each stack to its subtree via roots", () =
   assert.match(cfg, /- agentsmd/);
 });
 
+// ---- uninstall: remove the kit, keep the user's own content ----------------
+// Run the KIT copy against the project (mirrors `npx @zusem/smkit uninstall`), so
+// the running script isn't the one being deleted.
+const runUninstall = (proj, ...args) => spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "uninstall.mjs"), ...args],
+  { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+const freshInstall = (prefix) => {
+  const proj = mkTmp(prefix);
+  const r = runInit(proj, "--name", "U", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude");
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  return proj;
+};
+
+test("uninstall: removes generated + source + config, keeps user content", () => {
+  const proj = freshInstall("kit-uninstall-");
+  mkdirSync(join(proj, ".kit", "tasks"), { recursive: true });
+  writeFileSync(join(proj, ".kit", "tasks", "t1.md"), "# my task\n");
+  assert.ok(existsSync(join(proj, "engine")) && existsSync(join(proj, "CLAUDE.md")), "install present before uninstall");
+
+  const r = runUninstall(proj, "--yes");
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  for (const gone of ["engine", "profiles", "tools/kitgen", "kit.config.yaml", "CLAUDE.md", ".claude/commands", ".kit/hooks", ".kit/build-manifest.json"])
+    assert.ok(!existsSync(join(proj, gone)), `should be removed: ${gone}`);
+  for (const kept of [".kit/constitution.md", ".kit/tasks/t1.md"])
+    assert.ok(existsSync(join(proj, kept)), `should be kept: ${kept}`);
+});
+
+test("uninstall: --dry-run previews without changing anything", () => {
+  const proj = freshInstall("kit-uninstall-dry-");
+  const r = runUninstall(proj, "--dry-run");
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.match(r.stdout, /dry-run/);
+  assert.ok(existsSync(join(proj, "engine")) && existsSync(join(proj, "kit.config.yaml")), "dry-run must not delete anything");
+});
+
+test("uninstall: keeps a generated file the user edited (no --force)", () => {
+  const proj = freshInstall("kit-uninstall-edit-");
+  writeFileSync(join(proj, "CLAUDE.md"), "# my own notes, hand-edited\n");
+  const r = runUninstall(proj, "--yes");
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.ok(existsSync(join(proj, "CLAUDE.md")), "edited generated file must be kept");
+  assert.ok(!existsSync(join(proj, "engine")), "source is still removed");
+  assert.match(r.stdout, /KEEP — generated files you edited/);
+});
+
+test("uninstall: refuses without confirmation when there is no TTY", () => {
+  const proj = freshInstall("kit-uninstall-noconfirm-");
+  const r = runUninstall(proj); // no --yes, spawnSync has no TTY
+  assert.equal(r.status, 1);
+  assert.match(r.stderr + r.stdout, /Refusing to delete without confirmation/);
+  assert.ok(existsSync(join(proj, "kit.config.yaml")), "must not delete when confirmation is refused");
+});
+
 test("dist: doctor flags vendored yaml drift", () => {
   const tmp = copyKit();
   runKit(tmp, "build");

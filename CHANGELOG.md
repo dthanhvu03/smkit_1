@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.7] — 2026-07-17
+
+### Added
+- **`smkit uninstall`** — remove the kit from a project, safely. It deletes the generated agent config (identified by the **ownership manifest** + a live rebuild, so a generated file you have **edited** is kept unless you pass `--force`) and the vendored source (`engine/ profiles/ tools/kitgen/ .kit/hooks/` + templates + build manifest + `kit.config.yaml`), and **never** touches your own content — `.kit/constitution.md`, `.kit/decisions.md`, `.kit/tasks/`. Shows the full plan first; `--dry-run` previews without changing anything, `--yes` skips the prompt (required when there is no TTY, so it can't delete unattended). Run it from a fresh package — `npx @zusem/smkit uninstall` — so it isn't deleting the copy it runs from.
+
 ## [0.1.6] — 2026-07-17
 
 ### Fixed
@@ -58,6 +63,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.7]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.7
 [0.1.6]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.6
 [0.1.5]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.5
 [0.1.4]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.4

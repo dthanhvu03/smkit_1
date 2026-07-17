@@ -65,10 +65,11 @@ CLAUDE.md · .claude/{rules,agents,commands,skills,settings.json} · .cursor/{ru
 One CLI (`smkit`) or the equivalent npm scripts:
 
 ```bash
-smkit init      # npm run init   — set up / re-run the interview (copies the kit into your project)
-smkit build     # npm run build  — regenerate agent config from the source
-smkit check     # npm run check  — CI: fail if generated files are out of sync
-smkit doctor    # npm run doctor — health-check the kit + generated output (with fix hints)
+smkit init       # npm run init   — set up the kit (zero-question; --interview for the guided Q&A)
+smkit build      # npm run build  — regenerate agent config from the source
+smkit check      # npm run check  — CI: fail if generated files are out of sync
+smkit doctor     # npm run doctor — health-check the kit + generated output (with fix hints)
+smkit uninstall  #                — remove the kit from this project (keeps your own content)
 ```
 
 `smkit init` installs a **self-contained** copy (`engine/ profiles/ tools/ .kit/`) into your
@@ -88,6 +89,21 @@ This refreshes the **kit-owned** files (`engine/ profiles/ tools/ .kit/hooks/` +
 the new version, **keeps your own content** (`kit.config.yaml`, `.kit/constitution.md`,
 `.kit/decisions.md`, `.kit/tasks/`, `.gitignore`), saves the previous source to `.smkit-backup/`,
 and rebuilds. If you'd edited `engine/` or `profiles/` in place, re-apply those from the backup.
+
+### Uninstalling
+
+Remove the kit from a project — run it from a fresh package so it isn't deleting the copy it's
+running from:
+
+```bash
+npx @zusem/smkit uninstall            # preview first with:  npx @zusem/smkit uninstall --dry-run
+```
+
+It removes the generated agent config (identified by the ownership manifest, so a generated file
+you've **edited** is kept unless you pass `--force`) and the vendored source (`engine/ profiles/
+tools/kitgen/ .kit/hooks/` + templates + manifest + `kit.config.yaml`). It **never** removes your
+own content — `.kit/constitution.md`, `.kit/decisions.md`, `.kit/tasks/`. Add `--yes` to skip the
+confirmation prompt.
 
 ### Inside your AI tool
 
