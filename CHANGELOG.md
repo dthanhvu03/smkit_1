@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.12] — 2026-07-17
+
+### Changed
+- **`/ship` now reflects the 0.1.11 depth pass end-to-end.** Its Challenge step names the **pre-mortem** and one-way/two-way door lenses; its Build step points high-stakes paths (money · booking · inventory · external calls) at the **reliability** rule (idempotency, guarded shared state, timeouts, observable failures). The domain-model skill was already wired into the Design step in 0.1.11.
+
 ## [0.1.11] — 2026-07-17
 
 A depth pass — the techniques and thinking a senior team applies, added across four areas.
@@ -103,6 +108,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.12]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.12
 [0.1.11]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.11
 [0.1.10]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.10
 [0.1.9]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.9
