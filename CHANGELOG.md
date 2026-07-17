@@ -4,6 +4,18 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.13] — 2026-07-17
+
+Closes the remaining P1 roadmap items — the four deferred "hard" ones.
+
+### Added
+- **Automatic skill quality rubric** — doctor now holds skills to a hiring-bar like roles: a heuristic check that each skill body has an ordered **workflow**, a defined **output/structure**, and a **quality bar** (what good/done is). Missing one is a `SKILL_QUALITY_INCOMPLETE` warning (multilingual), never a blocker.
+- **Machine-readable, justified estimates** — the task template carries a parseable `estimate:` block (complexity S/M/L/XL · effort_days · confidence 0..1 · risk · a required **basis**), and `estimate.mjs` parses + sanity-checks it: flags an XL task to slice, a low-confidence guess to de-risk, bad enums/ranges, and an empty basis ("a number with no basis is a guess"). `/task` instructs filling it like a real quote — every number an estimate, not a promise.
+- **`smkit eval`** — a deterministic scorecard for the **hard-tier** guardrails: guard blocks/allows the right commands, the critique gate denies an unchallenged strict write and opens with a token, invalid config is rejected, the prompt-injection rule is actually emitted, settings-merge preserves a user hook, the integrity map covers the hooks. Prints pass/total (`--json` for CI, non-zero exit on failure). Scoped honestly to the mechanical tier; soft/model compliance needs a model-graded run (documented).
+
+### Changed
+- **Per-task critique gate.** The gate was session-scoped — one critique opened it for every later edit, even a different task. The token now carries a `task` id checked against the active task (`.kit/state/current-task`, set by `/task`); switching tasks re-opens the gate. Fully **backward-compatible**: with no active task it is exactly the old session-scoped check, so vibe/no-`/task` flows are unchanged. Verified end-to-end through the hook.
+
 ## [0.1.12] — 2026-07-17
 
 ### Changed
@@ -108,6 +120,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.13]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.13
 [0.1.12]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.12
 [0.1.11]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.11
 [0.1.10]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.10

@@ -69,6 +69,7 @@ smkit init       # npm run init   — set up the kit (zero-question; --interview
 smkit build      # npm run build  — regenerate agent config from the source
 smkit check      # npm run check  — CI: fail if generated files are out of sync
 smkit doctor     # npm run doctor — health-check the kit + generated output (with fix hints)
+smkit eval       #                — score the hard-tier guardrails (do they actually enforce?) · --json for CI
 smkit uninstall  #                — remove the kit from this project (keeps your own content)
 ```
 
