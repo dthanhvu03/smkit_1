@@ -9,10 +9,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir, platform } from "node:os";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseYaml, parseFrontmatter } from "./yaml.mjs";
+import { parseYaml, parseFrontmatter, YamlError } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
 import { mergeClaudeSettings } from "./settings-merge.mjs";
+import { hookHashes } from "./integrity.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
@@ -1433,4 +1434,83 @@ test("update: refuses a downgrade and leaves the project untouched", () => {
   assert.match(r.stderr + r.stdout, /downgrade/i);
   assert.equal(readFileSync(rulePath, "utf8"), before, "a refused downgrade must not touch the project");
   assert.ok(!existsSync(join(proj, ".smkit-backup")), "a refused downgrade must not even start a backup");
+});
+
+// ---- fuzz / property tests: hostile input must degrade safely --------------
+// Deterministic PRNG so a failure is reproducible (Math.random would not be).
+function lcg(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32; }
+
+test("fuzz: parseYaml never crashes uncontrolled — it returns or throws a YamlError with code+line", () => {
+  const rand = lcg(0xC0FFEE);
+  const alpha = "abc:-\n \t{}[]&*!|>#\"'0123.,";
+  const seeds = ["", ":", "a:", "  a: b\n\tb: c", "- - -", "{{{", "a: &x", "|\n b",
+    "a:\n b:\n  c:\n   d:", "\n\n\n", "a: [1,2]", "#c", 'k: "unterminated', "\t- x"];
+  const inputs = [...seeds];
+  for (let i = 0; i < 3000; i++) {
+    const n = 1 + Math.floor(rand() * 60); let s = "";
+    for (let j = 0; j < n; j++) s += alpha[Math.floor(rand() * alpha.length)];
+    inputs.push(s);
+    const b = seeds[Math.floor(rand() * seeds.length)];
+    inputs.push(b.slice(0, Math.floor(rand() * (b.length + 1))) + alpha[Math.floor(rand() * alpha.length)]);
+  }
+  for (const inp of inputs) {
+    try { parseYaml(inp); }
+    catch (e) {
+      assert.ok(e instanceof YamlError, `hostile input must fail as YamlError, got ${e?.name}: ${JSON.stringify(inp)}`);
+      assert.ok(e.code && typeof e.line === "number", `YamlError must carry code + line: ${JSON.stringify(inp)}`);
+    }
+  }
+});
+
+test("fuzz: classifyCommand never throws on arbitrary input", () => {
+  const rand = lcg(0xBADF00D);
+  const alpha = "rm -rf/~.;|&$()`'\"\n\t abcdDROP TABLEgitpush--force012";
+  for (let i = 0; i < 4000; i++) {
+    const n = Math.floor(rand() * 90); let s = "";
+    for (let j = 0; j < n; j++) s += alpha[Math.floor(rand() * alpha.length)];
+    assert.doesNotThrow(() => classifyCommand(s, { mode: "strict", projDir: "/w/app" }));
+  }
+});
+
+test("property: a dangerous command stays caught under whitespace obfuscation", () => {
+  const rand = lcg(0x5EED);
+  const dangerous = ["rm -rf /", "rm -rf ~", "git push --force", "git push -f",
+    "git reset --hard", "DROP TABLE users", "DROP DATABASE app", "TRUNCATE orders"];
+  for (const base of dangerous) {
+    for (let i = 0; i < 40; i++) {
+      const obf = base.replace(/ /g, () => (rand() < 0.5 ? "  " : " \t")); // extra whitespace preserves the danger
+      const r = classifyCommand(obf, { mode: "strict", projDir: "/w/app" });
+      assert.notEqual(r.decision, "allow", `whitespace-obfuscated dangerous command must not be allowed: ${JSON.stringify(obf)}`);
+    }
+  }
+});
+
+// ---- integrity + audit trail (batch C hardening) --------------------------
+test("integrity: doctor flags a vendored hook modified since install", () => {
+  const tmp = copyKit();
+  runKit(tmp, "build");
+  assert.match(runKit(tmp, "doctor").stdout, /HOOKS_INTEGRITY_OK/, "healthy hooks match shipped hashes");
+  editFile(join(tmp, ".kit", "hooks", "guard-shell.mjs"), /^/, "// tampered\n");
+  const r = runKit(tmp, "doctor");
+  assert.equal(r.status, 1, "a modified hook must fail doctor");
+  assert.match(r.stdout, /HOOKS_INTEGRITY_MISMATCH/);
+  assert.match(r.stdout, /guard-shell\.mjs/);
+});
+
+test("integrity: the shipped .hashes.json matches the actual hooks (release stays in sync)", () => {
+  const stored = JSON.parse(readFileSync(join(KIT, ".kit", "hooks", ".hashes.json"), "utf8")).files;
+  const current = hookHashes(join(KIT, ".kit", "hooks"));
+  assert.deepEqual(current, stored, "run `npm run integrity` after changing a hook");
+});
+
+test("audit: the guard records its block decision to .kit/audit.log", () => {
+  const tmp = copyKit();
+  const g = spawnSync(process.execPath, [join(tmp, ".kit", "hooks", "guard-shell.mjs")],
+    { input: '{"tool_input":{"command":"git push --force"}}', cwd: tmp,
+      env: { ...process.env, CLAUDE_PROJECT_DIR: tmp }, encoding: "utf8" });
+  assert.equal(g.status, 2, "dangerous command is blocked");
+  const entries = readFileSync(join(tmp, ".kit", "audit.log"), "utf8").trim().split("\n");
+  const last = JSON.parse(entries[entries.length - 1]);
+  assert.equal(last.decision, "block");
+  assert.match(last.cmd, /push --force/);
 });

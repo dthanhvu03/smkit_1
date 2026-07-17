@@ -12,6 +12,7 @@ import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
 import { applyBuild, classifyDrift } from "./apply.mjs";
 import { reconcileSettings } from "./settings-merge.mjs";
+import { hookHashes, HASHES_REL } from "./integrity.mjs";
 import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings, estimateTokenBudget, loadDoctorStrings, fmt } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
@@ -89,6 +90,23 @@ function runDoctor() {
   if (existsSync(vend) && existsSync(src) && readFileSync(vend, "utf8") !== readFileSync(src, "utf8"))
     err("Hooks", fmt(strings, "HOOKS_YAML_DRIFT"), "HOOKS_YAML_DRIFT");
   if (clean("Hooks")) ok("Hooks", reqHooks.map((h) => h.replace(".mjs", "")).join(", "), "HOOKS_OK");
+
+  // Integrity — vendored hooks match the hashes shipped with the kit. Tamper/corruption
+  // evidence (not signed): catches a hook modified or mangled since install. Skipped
+  // silently when no hashes file is present (older installs / dev checkouts mid-edit).
+  try {
+    const hashesPath = kp(HASHES_REL);
+    if (existsSync(hashesPath)) {
+      const stored = JSON.parse(readFileSync(hashesPath, "utf8")).files || {};
+      const current = hookHashes(kp(".kit/hooks"));
+      let bad = 0;
+      for (const [f, h] of Object.entries(stored)) {
+        if (!(f in current)) { err("Integrity", `hook missing since install: ${f}`, "HOOKS_INTEGRITY_MISSING"); bad++; }
+        else if (current[f] !== h) { err("Integrity", `hook modified since install (run \`smkit update\` to restore, or re-hash if intended): ${f}`, "HOOKS_INTEGRITY_MISMATCH"); bad++; }
+      }
+      if (!bad) ok("Integrity", `${Object.keys(stored).length} hook(s) match the shipped hashes`, "HOOKS_INTEGRITY_OK");
+    }
+  } catch (e) { warn("Integrity", `integrity check skipped (${e?.message || e})`, "INTEGRITY_CHECK_FAILED"); }
 
   // Build once, reused by drift + settings cross-check.
   let outputs = null;
@@ -201,7 +219,7 @@ function runDoctor() {
   // ---- print ----
   console.log(`SM Kit doctor — ${cfg?.project?.name || "?"} (mode=${cfg?.mode || "?"}, profile=${cfg?.stack?.profile || "?"})\n`);
   const sym = { ok: "  ✔", warn: "  ⚠ [WARN]", error: "  ✖ [ERROR]" };
-  for (const g of ["Node", "Config", "Paths", "Generated output", "Hooks", "Rules (enforce)", "Skills", "Roles"]) {
+  for (const g of ["Node", "Config", "Paths", "Generated output", "Hooks", "Integrity", "Rules (enforce)", "Skills", "Roles"]) {
     const items = R.filter((r) => r.g === g);
     if (!items.length) continue;
     console.log(g);

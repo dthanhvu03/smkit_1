@@ -6,7 +6,7 @@
 // Fails OPEN on any error so it never blocks legitimate work due to a bug.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { projectDir, loadConfig } from "./_lib.mjs";
+import { projectDir, loadConfig, auditLog } from "./_lib.mjs";
 
 // category -> libraries that all solve the same job (pick ONE per project).
 const CATEGORIES = {
@@ -67,6 +67,7 @@ let raw = "";
 process.stdin.on("data", (c) => (raw += c));
 process.stdin.on("end", async () => {
   let decision = "allow";
+  let found = [];
   let reason =
     "Consistency check: reuse existing patterns/names/libs; don't introduce a second way to do " +
     "something that exists. Record any new decision in .kit/decisions.md.";
@@ -74,7 +75,7 @@ process.stdin.on("end", async () => {
     const input = JSON.parse(raw || "{}");
     const ti = input.tool_input || {};
     const text = ti.content || ti.new_string || "";
-    const found = conflicts(candidatesFromText(text), installedDeps());
+    found = conflicts(candidatesFromText(text), installedDeps());
     if (found.length) {
       const strict = (await loadConfig()).mode === "strict";
       const msg =
@@ -85,6 +86,8 @@ process.stdin.on("end", async () => {
       else { reason = msg; }
     }
   } catch { /* fail open */ }
+
+  auditLog({ ts: Date.now(), gate: "consistency", decision, conflicts: found });
 
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {

@@ -7,7 +7,7 @@
 // on other targets the matching rule is guidance, like every hook.
 import { readFileSync } from "node:fs";
 import { join, relative, isAbsolute } from "node:path";
-import { projectDir, loadConfig, critiqueGateDecision } from "./_lib.mjs";
+import { projectDir, loadConfig, critiqueGateDecision, auditLog } from "./_lib.mjs";
 
 // A token is valid only if it carries a non-empty `decision` — proof a real critique
 // happened, not an empty file. Session-start removes it, so each session needs one pass.
@@ -29,13 +29,17 @@ process.stdin.on("data", (c) => (raw += c));
 process.stdin.on("end", async () => {
   let decision = "allow";
   let reason = "";
+  let relPath = "";
+  let mode = "vibe";
   try {
     const input = JSON.parse(raw || "{}");
     const ti = input.tool_input || {};
-    const fp = ti.file_path || ti.path || "";
-    const mode = (await loadConfig()).mode || "vibe";
-    ({ decision, reason } = critiqueGateDecision({ relPath: relPathOf(fp), mode, hasToken: tokenValid() }));
+    relPath = relPathOf(ti.file_path || ti.path || "");
+    mode = (await loadConfig()).mode || "vibe";
+    ({ decision, reason } = critiqueGateDecision({ relPath, mode, hasToken: tokenValid() }));
   } catch { decision = "allow"; reason = ""; } // fail open
+
+  auditLog({ ts: Date.now(), gate: "critique", mode, decision, reason, path: relPath });
 
   // Only assert a decision when we actually BLOCK. For allow/exempt/token/vibe we emit
   // NO permissionDecision — deferring to the normal permission flow rather than
