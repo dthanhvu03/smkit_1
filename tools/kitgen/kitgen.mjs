@@ -287,6 +287,7 @@ function main() {
   for (const w of res.warnings) console.error(`WARN: ${w}`);
   console.log(`Built ${outputs.size} file(s) → ${outDir}/  (mode=${cfg.mode}, profile=${cfg.stack?.profile}, lang=${cfg.project?.language})`);
   if (res.deleted) console.log(`  removed ${res.deleted} stale generated file(s)`);
+  if (res.backedUp) console.log(`  backed up ${res.backedUp} pre-existing file(s) → *.bak before overwriting`);
   if (res.skipped) console.log(`  skipped ${res.skipped} protected file(s) — rerun with --force to replace`);
   for (const rel of [...outputs.keys()].sort()) console.log(`  ${outDir}/${rel}`);
 }

@@ -101,6 +101,7 @@ export function planBuild({ outDir, outputs, projectDir, force = false }) {
   for (const [rel, content] of outputs) {
     const abs = pp(outDir, rel);
     const want = sha256(content);
+    let backupTo;
     if (existsSync(abs)) {
       const cur = readFileSync(abs, "utf8");
       if (cur === content) { newFiles[rel] = want; continue; } // already correct, still ours
@@ -109,16 +110,20 @@ export function planBuild({ outDir, outputs, projectDir, force = false }) {
       if (!owned) {
         const kind = tracked ? "locally-modified generated" : "untracked";
         // Steady state (manifest for this outDir exists) protects the file unless
-        // --force. Migration (no manifest yet) adopts it with a warning.
+        // --force. Migration (no manifest yet) adopts it.
         if (sameManifest && !force) {
           warnings.push(`skipped (would overwrite ${kind} file): ${outDir}/${rel} — rerun with --force to replace`);
           skipped.push(rel);
           continue;
         }
-        warnings.push(`overwriting ${kind} file: ${outDir}/${rel}`);
+        // About to overwrite a file that isn't ours — a first-install collision with
+        // the user's own file, or a --force over a local edit. Never lose it silently:
+        // save their copy to <file>.bak first (never clobbering an existing .bak).
+        backupTo = abs + ".bak";
+        warnings.push(`backed up existing ${kind} file → ${outDir}/${rel}.bak, then overwrote it`);
       }
     }
-    writes.push({ rel, abs, content });
+    writes.push(backupTo ? { rel, abs, content, backupTo } : { rel, abs, content });
     newFiles[rel] = want;
   }
 
@@ -138,6 +143,7 @@ export function applyBuild(opts, mutate = applyPlanTransactional) {
     written: plan.writes.length,
     deleted: plan.deletes.length,
     skipped: plan.skipped.length,
+    backedUp: plan.writes.filter((w) => w.backupTo).length,
     warnings: plan.warnings,
   };
 }
@@ -146,6 +152,7 @@ export function applyBuild(opts, mutate = applyPlanTransactional) {
 export function applyPlanDirect(plan) {
   for (const d of plan.deletes) rmSync(d.abs, { force: true });
   for (const w of plan.writes) {
+    if (w.backupTo && existsSync(w.abs) && !existsSync(w.backupTo)) cpSync(w.abs, w.backupTo);
     mkdirSync(dirname(w.abs), { recursive: true });
     writeFileSync(w.abs, w.content);
   }
@@ -168,6 +175,12 @@ export function applyPlanTransactional(plan) {
     }
     for (const w of plan.writes) {
       if (existsSync(w.abs)) {
+        // Persist the user's copy to <file>.bak (survives on success; the journal
+        // removes it on rollback so a failed build leaves the tree pristine).
+        if (w.backupTo && !existsSync(w.backupTo)) {
+          cpSync(w.abs, w.backupTo);
+          journal.push({ abs: w.backupTo, createdNew: true });
+        }
         const bp = join(backup, "b" + journal.length);
         cpSync(w.abs, bp);
         journal.push({ abs: w.abs, restore: bp });

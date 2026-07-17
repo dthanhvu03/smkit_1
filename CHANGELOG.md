@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] — 2026-07-17
+
+### Fixed
+- **Installing into an existing project no longer loses your files.** When the kit generates a file at a path you already had — `CLAUDE.md`, `.claude/settings.json`, `AGENTS.md`, a `.cursor/rules/*` file — the first install used to overwrite it with only a warning and **no backup**. It now **saves your original to `<file>.bak` before overwriting** (never clobbering an existing `.bak`), so nothing is lost silently; the build reports how many files it backed up. Same protection applies to a `--force` build over a generated file you've since edited. Files the kit does **not** generate were, and remain, untouched. (A later re-build still fully protects unowned files — skip + `--force` — this closes the one window, the very first install, where it didn't.)
+
 ## [0.1.7] — 2026-07-17
 
 ### Added
@@ -63,6 +68,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.8]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.7
 [0.1.6]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.6
 [0.1.5]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.5

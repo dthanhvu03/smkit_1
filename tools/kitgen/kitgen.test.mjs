@@ -1032,6 +1032,20 @@ test("manifest: hand-edited generated file is protected without --force, replace
   assert.ok(!/TAMPERED/.test(readFileSync(gen, "utf8")), "--force replaces it");
 });
 
+test("collision: first install backs up a pre-existing user file before overwriting it", () => {
+  const proj = mkTmp("kit-collide-");
+  // the user already has files at paths the kit will generate
+  mkdirSync(join(proj, ".claude"), { recursive: true });
+  writeFileSync(join(proj, "CLAUDE.md"), "MY OWN NOTES\n");
+  writeFileSync(join(proj, ".claude", "settings.json"), '{"MY_CUSTOM":true}\n');
+  const r = runInit(proj, "--name", "C", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude");
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  // overwritten with kit content, but the original is preserved next to it as .bak
+  assert.ok(!/MY OWN NOTES/.test(readFileSync(join(proj, "CLAUDE.md"), "utf8")), "kit content is now in place");
+  assert.equal(readFileSync(join(proj, "CLAUDE.md.bak"), "utf8"), "MY OWN NOTES\n", "original CLAUDE.md preserved in .bak");
+  assert.match(readFileSync(join(proj, ".claude", "settings.json.bak"), "utf8"), /MY_CUSTOM/, "original settings.json preserved in .bak");
+});
+
 // ---- P0.3: transactional generation (rollback on mid-write failure) -------
 test("transaction: a mid-write failure rolls back — earlier overwrite is restored", () => {
   const tmp = mkTmp("kit-tx-");
