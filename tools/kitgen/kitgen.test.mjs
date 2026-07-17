@@ -1593,3 +1593,28 @@ test("eval: a broken guardrail would be caught (self-test the harness)", () => {
   const r = bad.map(([name, fn]) => ({ name, pass: !!fn() }));
   assert.equal(r.filter((x) => x.pass).length, 0);
 });
+
+// ---- 0.1.14: update self-heal (don't trust the stamp blindly) -------------
+test("update: same version but DRIFTED source is re-synced (self-heal)", () => {
+  const proj = copyKit();
+  const rulePath = join(proj, "engine", "rules", "00-hard-rules.md");
+  const pkgVer = JSON.parse(readFileSync(join(KIT, "package.json"), "utf8")).version;
+  writeFileSync(join(proj, ".kit", ".smkit-version"), pkgVer + "\n");            // stamp == package
+  writeFileSync(rulePath, readFileSync(rulePath, "utf8").replace("Hard rules", "STALE DRIFT")); // but drifted
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "update.mjs"), "--yes", "--no-build"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.match(r.stdout, /re-syncing/i, "matching stamp must NOT stop a re-sync when the source drifted");
+  assert.match(readFileSync(rulePath, "utf8"), /Hard rules/, "drifted source is restored from the package");
+});
+
+test("update: same version AND in sync → genuinely nothing to do", () => {
+  const proj = copyKit();
+  const pkgVer = JSON.parse(readFileSync(join(KIT, "package.json"), "utf8")).version;
+  writeFileSync(join(proj, ".kit", ".smkit-version"), pkgVer + "\n");
+  const r = spawnSync(process.execPath, [join(KIT, "tools", "kitgen", "update.mjs"), "--yes", "--no-build"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.match(r.stdout, /in sync/i);
+  assert.ok(!existsSync(join(proj, ".smkit-backup")), "an in-sync no-op must not even start a backup");
+});

@@ -90,6 +90,11 @@ release doesn't change it automatically. Pull an update from a fresh package:
 npx @zusem/smkit@latest update
 ```
 
+> **If it says "already on X" but you know there's a newer release**, `npx` may be serving a
+> **stale cached** copy of the package. Pin the exact version — `npx @zusem/smkit@0.1.14 update`
+> — or force a fresh fetch with `npx --ignore-existing`. (Update also self-heals: if the version
+> stamp matches but the installed files differ from the package, it re-syncs them anyway.)
+
 This refreshes the **kit-owned** files (`engine/ profiles/ tools/ .kit/hooks/` + templates) to
 the new version, **keeps your own content** (`kit.config.yaml`, `.kit/constitution.md`,
 `.kit/decisions.md`, `.kit/tasks/`, `.gitignore`), saves the previous source to `.smkit-backup/`,
