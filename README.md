@@ -74,10 +74,11 @@ smkit uninstall  #                — remove the kit from this project (keeps yo
 
 `smkit init` installs a **self-contained** copy (`engine/ profiles/ tools/ .kit/`) into your
 project, so hooks and the generator run without any `node_modules` dependency and you can edit
-rules/profiles in place. Installing into an **existing** project is safe: if you already have a
-file at a path the kit generates (`CLAUDE.md`, `.claude/settings.json`, `AGENTS.md`, …), your
-original is saved to `<file>.bak` before it's overwritten — and anything the kit doesn't
-generate is never touched.
+rules/profiles in place. Installing into an **existing** project is safe. Your `.claude/settings.json` is **merged**, not
+replaced — the kit adds its hooks and deny rules while keeping your own hooks, permissions, `env`,
+and MCP servers. Any other file the kit generates that you already have (`CLAUDE.md`, `AGENTS.md`,
+…) is saved to `<file>.bak` before it's overwritten, and anything the kit doesn't generate is
+never touched.
 
 ### Updating to a new version
 

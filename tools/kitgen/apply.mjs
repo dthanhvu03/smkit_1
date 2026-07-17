@@ -61,6 +61,9 @@ export function classifyDrift({ outDir, outputs, projectDir }) {
     for (const f of readdirSync(pp(d))) {
       const rel = `${d}/${f}`;
       try { if (!statSync(pp(rel)).isFile()) continue; } catch { continue; }
+      // A `<generated>.bak` is our own safety backup (from an overwrite/merge), not a
+      // stray file — don't flag it as unexpected.
+      if (rel.endsWith(".bak") && known.has(rel.slice(0, -4))) continue;
       if (!known.has(rel)) unexpected.push(rel);
     }
   }

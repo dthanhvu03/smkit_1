@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml } from "./yaml.mjs";
 import { validateConfig } from "./validate.mjs";
 import { applyBuild, classifyDrift } from "./apply.mjs";
+import { reconcileSettings } from "./settings-merge.mjs";
 import { buildOutputs, collectRules, collectRoles, collectSkills, collectBuildWarnings, estimateTokenBudget, loadDoctorStrings, fmt } from "../../engine/emitter.mjs";
 
 // KIT_DIR = where the kit's sources live (engine/, profiles/) — relative to this file,
@@ -93,7 +94,7 @@ function runDoctor() {
   let outputs = null;
   const outDir = cfg?.outDir || "dist";
   if (cfg) {
-    try { outputs = buildOutputs(cfg, { kitDir: KIT_DIR }); }
+    try { outputs = buildOutputs(cfg, { kitDir: KIT_DIR }); reconcileSettings(outputs, { projectDir: PROJECT_DIR, outDir }); }
     catch (e) { err("Generated output", fmt(strings, "GENERATED_OUTPUT_BUILD_FAILED", { message: e.message }), "GENERATED_OUTPUT_BUILD_FAILED"); }
   }
 
@@ -260,6 +261,10 @@ function main() {
   for (const w of collectBuildWarnings(KIT_DIR, cfg, langOf(cfg)))
     console.error(`WARN [${w.code || "SKILL_SCHEMA"}] [${w.target}/${w.field}] ${w.source}: ${w.message}${w.remediation ? ` -> ${w.remediation}` : ""}`);
   const outputs = buildOutputs(cfg, { kitDir: KIT_DIR });
+  // Keep an existing .claude/settings.json: merge the kit's hooks/deny into the
+  // user's file instead of replacing it (check/build/doctor all reconcile the same
+  // way, so the drift check stays clean).
+  reconcileSettings(outputs, { projectDir: PROJECT_DIR, outDir });
 
   if (mode === "check") {
     let drift = 0;

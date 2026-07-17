@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parseYaml, parseFrontmatter } from "./yaml.mjs";
 import { validateConfig, resolveOutDir } from "./validate.mjs";
 import { applyPlanTransactional } from "./apply.mjs";
+import { mergeClaudeSettings } from "./settings-merge.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt } from "../../.kit/hooks/_lib.mjs";
 
@@ -1044,6 +1045,61 @@ test("collision: first install backs up a pre-existing user file before overwrit
   assert.ok(!/MY OWN NOTES/.test(readFileSync(join(proj, "CLAUDE.md"), "utf8")), "kit content is now in place");
   assert.equal(readFileSync(join(proj, "CLAUDE.md.bak"), "utf8"), "MY OWN NOTES\n", "original CLAUDE.md preserved in .bak");
   assert.match(readFileSync(join(proj, ".claude", "settings.json.bak"), "utf8"), /MY_CUSTOM/, "original settings.json preserved in .bak");
+});
+
+test("settings-merge: preserves user keys, unions deny + hooks, idempotent", () => {
+  const user = {
+    permissions: { allow: ["Bash(ls:*)"], deny: ["Read(./secret)"] },
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "my-own-hook" }] }] },
+    env: { MY_VAR: "1" },
+    mcpServers: { mine: {} },
+  };
+  const kit = {
+    $schema: "kit-schema",
+    permissions: { deny: ["Bash(rm -rf:*)"] },
+    hooks: {
+      PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "node guard-shell.mjs" }] }],
+      SessionStart: [{ hooks: [{ type: "command", command: "node session-start.mjs" }] }],
+    },
+  };
+  const m = mergeClaudeSettings(user, kit);
+  assert.deepEqual(m.env, { MY_VAR: "1" }, "unrelated user keys preserved");
+  assert.deepEqual(m.mcpServers, { mine: {} });
+  assert.deepEqual(m.permissions.allow, ["Bash(ls:*)"], "user allow preserved");
+  assert.ok(m.permissions.deny.includes("Read(./secret)") && m.permissions.deny.includes("Bash(rm -rf:*)"), "deny unioned");
+  assert.equal(m.hooks.PreToolUse.length, 2, "user hook kept AND kit hook added");
+  assert.ok(m.hooks.SessionStart, "kit event added");
+  assert.deepEqual(mergeClaudeSettings(m, kit), m, "idempotent — re-merging changes nothing");
+});
+
+test("settings-merge: install into a project with existing settings keeps user hooks + permissions, drift stays clean", () => {
+  const proj = mkTmp("kit-settings-");
+  mkdirSync(join(proj, ".claude"), { recursive: true });
+  writeFileSync(join(proj, ".claude", "settings.json"), JSON.stringify({
+    permissions: { allow: ["Bash(npm test:*)"] },
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "my-own-guard" }] }] },
+    env: { KEEP_ME: "yes" },
+  }, null, 2) + "\n");
+  assert.equal(runInit(proj, "--name", "S", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude").status, 0);
+
+  const s = JSON.parse(readFileSync(join(proj, ".claude", "settings.json"), "utf8"));
+  assert.deepEqual(s.env, { KEEP_ME: "yes" }, "user env still live in the merged file");
+  assert.ok(s.permissions.allow.includes("Bash(npm test:*)"), "user allow still live");
+  assert.ok(s.hooks.PreToolUse.some((e) => e.hooks?.[0]?.command === "my-own-guard"), "user hook kept");
+  assert.ok(s.hooks.PreToolUse.some((e) => /guard-shell/.test(e.hooks?.[0]?.command || "")), "kit guard hook added");
+  assert.ok(s.hooks.SessionStart, "kit session-start hook added");
+  assert.ok((s.permissions.deny || []).some((d) => /rm -rf/.test(d)), "kit deny added");
+  assert.ok(existsSync(join(proj, ".claude", "settings.json.bak")), "original still backed up (0.1.8 safety net)");
+
+  // idempotent merge → the CI drift check is clean right after install
+  const chk = spawnSync(process.execPath, [join(proj, "tools", "kitgen", "kitgen.mjs"), "check"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(chk.status, 0, `check must be clean after a settings merge: ${chk.stdout}${chk.stderr}`);
+  // doctor is clean too — the settings.json.bak we created must not be flagged as an
+  // unexpected stray file in a kit-owned directory.
+  const doc = spawnSync(process.execPath, [join(proj, "tools", "kitgen", "kitgen.mjs"), "doctor"],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.match(doc.stdout, /0 error\(s\), 0 warning\(s\)/, `doctor must be clean after merge: ${doc.stdout}`);
 });
 
 // ---- P0.3: transactional generation (rollback on mid-write failure) -------

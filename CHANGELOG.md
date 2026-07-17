@@ -4,6 +4,14 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] — 2026-07-17
+
+### Added
+- **`.claude/settings.json` is now merged, not replaced.** Installing into a project that already has a `settings.json` keeps **your** hooks, permissions (`allow`/`ask`/your `deny`), `env`, and MCP servers — the kit only ensures **its** hooks and deny rules are also present, appended without duplicates. The merge is idempotent, so re-builds and the CI drift check (`check` / `doctor`) stay clean, and your original is still saved to `.bak` as a safety net. Files with no existing settings, or that are already exactly the kit's, are written as before. (Deeper follow-up to 0.1.8, which only backed the file up.)
+
+### Fixed
+- **`doctor` no longer flags the kit's own `.bak` backups as unexpected files.** A `<generated-file>.bak` left by an overwrite/merge is a deliberate backup, not stray output, so it's excluded from the "unexpected file in a kit-owned directory" check.
+
 ## [0.1.8] — 2026-07-17
 
 ### Fixed
@@ -68,6 +76,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.9]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.9
 [0.1.8]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.8
 [0.1.7]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.7
 [0.1.6]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.6
