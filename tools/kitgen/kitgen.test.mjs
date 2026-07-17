@@ -1514,3 +1514,21 @@ test("audit: the guard records its block decision to .kit/audit.log", () => {
   assert.equal(last.decision, "block");
   assert.match(last.cmd, /push --force/);
 });
+
+// ---- P1-#3: skill quality rubric catches a thin skill ---------------------
+test("skill rubric: a thin skill (no workflow/output/bar) is flagged SKILL_QUALITY_INCOMPLETE", () => {
+  const tmp = copyKit();
+  const dir = join(tmp, "engine", "skills", "thin-skill");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"),
+    "---\nname: thin-skill\n" +
+    "description: Use when you want to test the rubric. Invoke to exercise it.\n" +
+    "license: Apache-2.0\nmetadata:\n  sixmen-trust-tier: \"T0\"\n---\n\n" +
+    "# Thin\nIt helps with a thing.\n"); // no ordered steps, no structure, no quality bar
+  const { warnings } = validateSkillGovernance(tmp, "en");
+  const hit = warnings.filter((w) => /SKILL_QUALITY_INCOMPLETE/.test(w) && /thin-skill/.test(w));
+  assert.equal(hit.length, 1, `expected one quality warning for thin-skill, got: ${warnings.join(" | ")}`);
+  assert.match(hit[0], /workflow/i);
+  assert.match(hit[0], /output/i);
+  assert.match(hit[0], /quality bar/i);
+});

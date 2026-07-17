@@ -65,6 +65,7 @@ SKILL_DESCRIPTION_MISSING: "{tag}: missing description (required by the Agent Sk
 SKILL_DESCRIPTION_TOO_LONG: "{tag}: description is {length} chars (>{limit}, the Agent Skills spec limit) -> shorten it, move detail into references/"
 SKILL_DESCRIPTION_LISTING_TOO_LONG: "{tag}: description+when_to_use is {length} chars (>{limit}, Claude's listing display limit) -> it will be truncated in the skill listing"
 SKILL_DESCRIPTION_TRIGGER_WEAK: "{tag}: description/when_to_use has no clear trigger cue (e.g. \"use when\", \"invoke\", \"dùng khi\") -> the agent may have trouble picking the right skill (heuristic, may be a false positive)"
+SKILL_QUALITY_INCOMPLETE: "{tag}: body reads thin for a senior skill — no clear {missing} (heuristic quality-bar check, may be a false positive)"
 SKILL_TRUST_TIER_INVALID: "{tag}: trustTier \"{tier}\" is invalid -> use {tiers}"
 SKILL_TRUST_TIER_AUTO_INVOKE: "{tag}: trustTier {tier} must be manual-only -> set invocation.implicit: false in skill.kit.yaml"
 SKILL_TRUST_TIER_MISSING_HASH: "{tag}: trustTier {tier} is missing provenance.contentHash -> pin the content with a hash before use"

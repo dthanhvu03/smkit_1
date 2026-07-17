@@ -65,6 +65,7 @@ SKILL_DESCRIPTION_MISSING: "{tag}: thiếu description (bắt buộc theo Agent 
 SKILL_DESCRIPTION_TOO_LONG: "{tag}: description dài {length} ký tự (>{limit}, giới hạn Agent Skills spec) -> rút gọn, đưa chi tiết vào references/"
 SKILL_DESCRIPTION_LISTING_TOO_LONG: "{tag}: description+when_to_use dài {length} ký tự (>{limit}, giới hạn hiển thị của Claude) -> sẽ bị cắt bớt trong skill listing"
 SKILL_DESCRIPTION_TRIGGER_WEAK: "{tag}: description/when_to_use không có cue kích hoạt rõ ràng (vd \"use when\", \"invoke\", \"dùng khi\") -> agent có thể khó chọn đúng skill (heuristic, có thể false positive)"
+SKILL_QUALITY_INCOMPLETE: "{tag}: thân skill còn mỏng so với chuẩn — thiếu {missing} (rubric heuristic chất lượng, có thể false positive)"
 SKILL_TRUST_TIER_INVALID: "{tag}: trustTier \"{tier}\" không hợp lệ -> dùng {tiers}"
 SKILL_TRUST_TIER_AUTO_INVOKE: "{tag}: trustTier {tier} phải manual-only -> đặt invocation.implicit: false trong skill.kit.yaml"
 SKILL_TRUST_TIER_MISSING_HASH: "{tag}: trustTier {tier} thiếu provenance.contentHash -> pin nội dung bằng hash trước khi dùng"

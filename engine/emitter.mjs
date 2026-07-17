@@ -488,6 +488,25 @@ function seniorityGaps(body) {
     .map(([dim]) => dim);
 }
 
+// Skill quality rubric (heuristic, WARN — the skill equivalent of the role hiring-bar).
+// A good skill body reads like a repeatable procedure a senior would trust: a concrete
+// WORKFLOW (ordered steps), a defined OUTPUT/structure to produce, and a QUALITY BAR
+// (what "good"/"done" is, or what fails the gate). Missing one is a nudge, not a blocker.
+const SKILL_QUALITY_CUES = {
+  "a workflow (ordered steps)": [/##\s*workflow/i, /^\s*\d+\.\s/m, /\bstep\b/i, /\bquy trình\b/i, /\bcác bước\b/i],
+  "an output/structure to produce": [/##\s*output/i, /output format/i, /```/, /^\s*\|.*\|/m, /\bđịnh dạng\b/i, /\bkết quả\b/i],
+  "a quality bar (what good/done is)": [
+    /\brequired\b/i, /\bdone\b/i, /\bverdict\b/i, /\bevidence\b/i, /\bmust\b/i, /\bfails? the\b/i,
+    /good looks like/i, /\bpasses?\b/i, /\bhoàn thành\b/i, /\bbằng chứng\b/i, /\bđạt\b/i, /\bbắt buộc\b/i,
+  ],
+};
+function skillQualityGaps(body) {
+  const text = String(body || "");
+  return Object.entries(SKILL_QUALITY_CUES)
+    .filter(([, res]) => !res.some((re) => re.test(text)))
+    .map(([dim]) => dim);
+}
+
 // Deterministic content-hash scope: the SKILL.md source as authored + every supporting
 // file under scripts/references/assets, sorted by path. skill.kit.yaml (governance) and
 // tests/ are OUT of scope — pinning covers the skill's actual behavior, not its metadata.
@@ -556,6 +575,10 @@ export function validateSkillGovernance(kitDir, lang = "vi") {
     const triggerText = `${s.description || ""} ${s.when_to_use || ""}`;
     if (s.description && !TRIGGER_CUES.some((re) => re.test(triggerText)))
       wrn("SKILL_DESCRIPTION_TRIGGER_WEAK", { tag });
+
+    // Quality rubric (hiring-bar for skills, mirror of the role seniority check).
+    const qGaps = skillQualityGaps(s.body);
+    if (qGaps.length) wrn("SKILL_QUALITY_INCOMPLETE", { tag, missing: qGaps.join("; ") });
 
     if (tier !== undefined && !SKILL_TRUST_TIERS.includes(tier))
       err("SKILL_TRUST_TIER_INVALID", { tag, tier, tiers: SKILL_TRUST_TIERS.join(" | ") });
