@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.16] — 2026-07-17
+
+### Fixed
+- **The generated `.gitignore` no longer ignores migration files.** It shipped a blanket `*.sql`, which would silently drop **migration source** (goose / golang-migrate / prisma `.sql` files in `db/migrations/`) out of git — a data-loss-class bug for any DB-backed project (a founder couldn't recreate or deploy their schema). Narrowed to real dumps only (`*.dump`, `*.sql.gz`, `/dumps/`); migrations are now always committed. Regression test added. (Found by dogfooding `/ship` on a real Go + Postgres project.)
+
 ## [0.1.15] — 2026-07-17
 
 ### Fixed
@@ -133,6 +138,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.16]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.16
 [0.1.15]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.15
 [0.1.14]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.14
 [0.1.13]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.13

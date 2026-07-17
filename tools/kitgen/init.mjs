@@ -311,9 +311,12 @@ dist/
 build/
 coverage/
 
-# Logs & dumps
+# Logs & DB dumps — NOT migrations. Migration files (goose / golang-migrate / prisma)
+# are SOURCE and must be committed, so never ignore *.sql broadly — only real dumps.
 *.log
-*.sql
+*.dump
+*.sql.gz
+/dumps/
 storage/logs/*
 
 # Kit runtime state (regenerated — not shared)
