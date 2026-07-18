@@ -4,6 +4,11 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.21] — 2026-07-17
+
+### Added
+- **`brainstorm` skill — the kit's divergent half.** The kit was strong at *choosing between options* (`/discover`, `/roundtable`, `senior-reasoning`) but had nothing for *generating* them — it jumped straight to "here are 2 options", skipping the wide exploration good options come from. The new skill diverges first: generate many (quantity over quality, defer judgment), using fixed techniques (how-might-we · first-principles · inversion · analogy · extremes · combine · constraint-flip), then cluster and hand the best few to a convergent step. It makes options; it doesn't pick them. Wired into `/discover` and `/ship` design (diverge before narrowing) and the command-routing rule (stuck / no obvious approach → brainstorm).
+
 ## [0.1.20] — 2026-07-17
 
 ### Changed — hardening from a real code review of a kit-built project
@@ -168,6 +173,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.21]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.21
 [0.1.20]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.20
 [0.1.19]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.19
 [0.1.18]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.18

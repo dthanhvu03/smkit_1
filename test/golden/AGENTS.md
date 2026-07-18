@@ -28,6 +28,7 @@ Intent → command:
 | First use / the constitution is still placeholders | `/onboard` — read the project & fill setup |
 | Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
 | A small next step, or continue mid-feature | `/start` |
+| Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |
 | Prepare/track a piece of work (scope, plan, impact) | `/task` |
@@ -86,6 +87,7 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - **reviewer** — Use immediately after code is written or changed, before finishing. Invoke for static review of a diff — correctness bugs, consistency with recorded decisions, style and security smells. Does not run the app (that is qa).
 
 ## Skills
+- **brainstorm** — Use when the path isn't obvious and you need MANY options before choosing — a vague idea, a design with no clear approach, a bug with no obvious cause. Invoke to diverge WIDE first (generate lots, defer judgment, use fixed idea-generation techniques), then cluster and hand the best few to a convergent step (/discover, senior-reasoning). The kit's divergent half — it makes options, it doesn't pick them.
 - **code-review** — Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
 - **cross-review** — Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
 - **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
