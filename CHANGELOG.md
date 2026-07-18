@@ -4,6 +4,13 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.20] — 2026-07-17
+
+### Changed — hardening from a real code review of a kit-built project
+Reviewing a real Go+Postgres project built with `/ship` surfaced two ways the kit's guidance let quality slip. Both tightened:
+- **Evidence gate rejects a test claim with no test file.** A task had ticked "Tests pass — e2e Docker" while **no such test file existed**. The evidence-gate rule + task template now state plainly: a ticked test gate must name the real test file(s) and command output; "tests pass" with no corresponding test file that actually exists is a **RED gate, not green** — if you couldn't run it, say so and leave it unchecked.
+- **`/onboard` now wires enforceable "must never" lines into `invariants:`.** A constitution invariant that lives only in `.kit/constitution.md` is *soft* and drifted (a required audit-log write was silently skipped). Onboarding now maps each high-stakes must-never that has a path + checkable rule into `kit.config.yaml` → `invariants:`, so the generator emits a **path-scoped rule** that fires when that area is touched — moving safety-critical rules from soft-tier to enforced.
+
 ## [0.1.19] — 2026-07-17
 
 ### Added
@@ -161,6 +168,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.20]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.20
 [0.1.19]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.19
 [0.1.18]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.18
 [0.1.17]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.17

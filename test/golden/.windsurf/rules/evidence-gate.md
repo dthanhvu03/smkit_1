@@ -7,6 +7,7 @@ trigger: always_on
 
 - **Never report a task as done, passing, or fixed without evidence.** State what you actually ran and its result.
 - If tests exist: run them and quote the outcome (pass/fail counts). If they fail, say so with the output — do not hide it.
+- **A ticked "Tests pass" claim must name the real test file(s) and the command output.** "e2e / Docker tests", "tests pass", or a checked test-gate with **no corresponding test file that actually exists in the change** is a **RED gate, not a green one** — evidence is a file someone can run, not a sentence describing one. If you couldn't run it (no DB, not written yet), say exactly that and leave the gate unchecked; never tick a gate for a test that doesn't exist.
 - If there are no tests: describe concretely how you verified the behavior (what you ran, what you observed).
 - If a step was skipped or is unverified, say that plainly — don't imply it was checked.
 - Skills that produce a review/verdict (code-review, test-design) must fill their **Test evidence** section; an empty evidence section means the gate is not satisfied.
