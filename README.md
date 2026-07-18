@@ -16,6 +16,13 @@ AI coding agents drift: each session they re-decide structure, invent a second w
 
 ## Quick start
 
+**Requirement:** the kit's own tooling runs on **Node.js ≥ 18** on your machine — even if your
+project is Go, Python, PHP, or Rust (the kit's generator and hooks are Node). This is **separate
+from your app**: the kit never runs your project, so **your app keeps whatever runtime and version
+it already uses** (Node 16, Go 1.22, Python 3.11 — untouched). If you're on an older Node, the kit
+warns clearly instead of crashing; install a newer one via [nvm](https://github.com/nvm-sh/nvm) or
+[volta](https://volta.sh).
+
 **One command** — run it inside your project (new or existing) and answer a few questions:
 
 ```bash

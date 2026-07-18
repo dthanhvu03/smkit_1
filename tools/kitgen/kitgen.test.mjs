@@ -16,6 +16,7 @@ import { mergeClaudeSettings } from "./settings-merge.mjs";
 import { hookHashes } from "./integrity.mjs";
 import { parseEstimate } from "./estimate.mjs";
 import { runEval } from "./eval.mjs";
+import { nodeWarning } from "./node-check.mjs";
 import { collectSkills, collectRules, collectBuildWarnings, validateSkillGovernance, validateRoleGovernance, validateRuleGovernance, roleEffective, ruleEffective, estimateTokenBudget, profileList, profileRoot } from "../../engine/emitter.mjs";
 import { makeMatcher, matchesBlock, DEFAULT_BLOCK, classifyCommand, splitSegments, critiqueGateDecision, isGateExempt, gateTokenValid, currentTaskId } from "../../.kit/hooks/_lib.mjs";
 
@@ -1658,4 +1659,15 @@ test("team: session-start injects per-file decisions from .kit/decisions/", () =
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /DECISION RECORDS/, "per-file ADRs are injected");
   assert.match(ctx, /pgx not ORM/);
+});
+
+// ---- 0.1.19: Node version guard -------------------------------------------
+test("node-check: warns below the floor, silent at/above, never mentions the app", () => {
+  const w = nodeWarning(16, "16.14.0");
+  assert.match(w, /Node 16\.14\.0/);
+  assert.match(w, />= 18/);
+  assert.match(w, /project's app runtime and version are untouched/, "must reassure the app is unaffected");
+  assert.equal(nodeWarning(18, "18.0.0"), null, "at the floor → no warning");
+  assert.equal(nodeWarning(22, "22.3.0"), null);
+  assert.equal(nodeWarning(24, "24.0.0"), null, "newer Node → no warning");
 });

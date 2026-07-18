@@ -12,6 +12,9 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { KNOWN_AGENTS } from "./validate.mjs"; // single source of truth for supported targets
+import { warnIfOldNode } from "./node-check.mjs";
+
+warnIfOldNode(); // clear heads-up if the dev machine's Node is below the tested floor
 
 // KIT_DIR = the kit's own files (profiles/, templates, kitgen). PROJECT_DIR = the
 // project being set up, where config + memory are written and the build runs.

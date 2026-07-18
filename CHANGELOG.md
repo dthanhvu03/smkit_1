@@ -4,6 +4,13 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.19] — 2026-07-17
+
+### Added
+- **Clear Node-version guidance instead of a cryptic crash.** The kit's tooling runs on the dev machine's Node (the runtime works on ~14+, tested floor 18); its own `node --test` is contributor-only. `init`, `build`, and `update` now print a plain heads-up if you're below Node 18 — *"the kit's tooling targets Node ≥18; your project's app runtime and version are untouched"* — non-blocking, so it still runs if it can. This separates the two versions founders conflate: **the kit's tooling Node vs your app's own runtime** (Go, Python, Node 16, … — which the kit never runs or constrains).
+- **README states the requirement up front** — Node ≥18 for the kit's tooling *even on non-Node projects* (Go/Python/PHP/Rust), and that your app keeps its own runtime untouched.
+- **CI now also tests Node 24** (matrix is Linux · macOS · Windows × Node 18/20/22/24) — forward-compatibility, not just the floor.
+
 ## [0.1.18] — 2026-07-17
 
 ### Added — team / multi-person support
@@ -154,6 +161,7 @@ A depth pass — the techniques and thinking a senior team applies, added across
 
 - Initial published baseline: zero-dependency multi-IDE generator (Claude, Cursor, Copilot, Windsurf, AGENTS.md), guard hooks, modes, roles/skills/rules, and the `/ship` A→Z command.
 
+[0.1.19]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.19
 [0.1.18]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.18
 [0.1.17]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.17
 [0.1.16]: https://github.com/dthanhvu03/smkit_1/releases/tag/v0.1.16
