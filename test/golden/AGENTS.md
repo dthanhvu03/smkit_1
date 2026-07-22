@@ -28,6 +28,7 @@ Intent → command:
 | First use / the constitution is still placeholders | `/onboard` — read the project & fill setup |
 | Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
 | A small next step, or continue mid-feature | `/start` |
+| Build or change a screen / component / styling (UI) | `/start` — routes to the **frontend** role (ui-design → ui-review) |
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |
@@ -79,6 +80,7 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - **debugger** — Use when something is broken and the cause is unknown — a failing test, an error/stack trace, or wrong behavior. Invoke to reproduce, isolate, and find the root cause. Not for building the fix (that's the implementer) or confirming it works afterward (qa).
 - **devops** — Use for release, build, deploy, backup, and environment or CI tasks. Invoke for shipping, operational safety, and infrastructure changes.
 - **docs-manager** — Use when a code change leaves documentation stale — README, API docs, setup steps, or plain-language usage notes. Invoke to keep docs in sync with what the code actually does. Not for recording technical decisions (that's the Decision Log) or writing code.
+- **frontend** — Use to build or change user-facing UI — components, screens, styling, and client-side behavior. Invoke for turning a design or feature into accessible, responsive, token-driven UI. Not for system structure/interfaces (architect), backend/data wiring (implementer), or the final "does it work" verdict (qa).
 - **git-manager** — Use when work needs to be committed, branched, or turned into a pull request. Invoke for a clean history, conventional commit messages, and PR hygiene. Not for writing the code itself (implementer) or reviewing it (reviewer).
 - **implementer** — Use to write or edit code once a plan or decision exists. Invoke for building features, fixing bugs, and wiring things up while following existing patterns. The default worker for changing code.
 - **orchestrator** — Use to start, resume, or route a task across roles. Invoke for coordinating a small team (1-3 roles), sequencing gates by mode, and plain-language checkpoints. Does not implement code in strict mode.
@@ -101,6 +103,8 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - **security-review** — Use when a change touches auth, secrets, shell/command execution, file access, or the guard/hooks. Invoke for a risk assessment with concrete exploit scenarios and fixes.
 - **senior-reasoning** — Use before any non-trivial decision or design — invoke to think it through like a senior, not tick a checklist. Forces the moves that separate senior from junior: challenge the premise, weigh 2+ options with real numbers, trace second-order effects, name the risk a junior misses, steelman the opposite, and state assumptions + confidence. Raises the depth of /discover, /challenge, and /ship design.
 - **test-design** — Use when a task needs a QA or test gate. Invoke to design test cases and edge cases and to produce the exact commands that prove the behavior works.
+- **ui-design** — Use before building or changing UI — after the feature is clear, before writing components. Invoke to pin the UI contract the founder and code agree on: the design tokens to use, every state a component must handle (including the loading/empty/error states UI usually forgets), and how it reflows on small screens. Turns "make a screen" into a spec the code can't quietly cut corners on.
+- **ui-review** — Use when UI has been built or changed, before finishing. Invoke to check the interface for accessibility (a concrete WCAG 2.2 subset), the missing states UI usually ships without (loading/empty/error), responsive breakage, and design-token drift. The visual/a11y counterpart to code-review, which covers logic and security.
 
 ## Commands
 - `/challenge` — Run the pre-build critique — stress-test the planned change through fixed lenses and record a go/adjust/stop verdict before any code is written.

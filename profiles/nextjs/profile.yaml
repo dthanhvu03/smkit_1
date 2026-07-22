@@ -13,3 +13,5 @@ defaults:
 invariants:
   - path: "app/**/route.ts"
     rule: "API routes validate input and return typed responses; no business logic in the route body."
+  - path: "app/**/*.tsx|components/**/*.tsx"
+    rule: "Interactive elements have an accessible name + correct role; images have alt; data views handle loading/empty/error. Enforce the static part with eslint-plugin-jsx-a11y; use the ui-review skill for the rest."

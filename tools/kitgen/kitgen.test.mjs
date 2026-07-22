@@ -533,7 +533,9 @@ test("invariants: project override:true replaces the profile invariant (F-07)", 
   editFile(join(tmp, "kit.config.yaml"), "invariants: []",
     'invariants:\n  - id: invariant-app-route-ts\n    override: true\n    path: "app/**/route.ts"\n    rule: "project wins here"');
   assert.equal(runKit(tmp, "build").status, 0);
-  const mdc = readFileSync(join(tmp, "out", ".cursor", "rules", "invariant-1-app-route-ts.mdc"), "utf8");
+  // override splices the old record out and re-pushes it last, so once the profile ships a
+  // second invariant (a11y) the overridden app-route-ts lands at index 2, not 1.
+  const mdc = readFileSync(join(tmp, "out", ".cursor", "rules", "invariant-2-app-route-ts.mdc"), "utf8");
   assert.match(mdc, /project wins here/);
 });
 
@@ -755,7 +757,7 @@ test("role: emitted subagent frontmatter is byte-identical for the 7 shipped rol
   assert.equal(after, before, "no nested permissions/runtime/skills/memory declared -> output unchanged");
 });
 
-test("role: governance — real kit's 12 shipped roles have zero errors/warnings", () => {
+test("role: governance — real kit's 13 shipped roles have zero errors/warnings", () => {
   assert.deepEqual(validateRoleGovernance(KIT_ROOT), { errors: [], warnings: [] });
 });
 
@@ -1203,8 +1205,8 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.match(b.estimateMethod, /heuristic/i);
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
-  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 12, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 14, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.roleCatalog.items.length === 13, "one catalog item per shipped role");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 16, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);
