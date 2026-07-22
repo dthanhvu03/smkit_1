@@ -26,6 +26,7 @@ Intent → command:
 | First use / the constitution is still placeholders | `/onboard` — read the project & fill setup |
 | Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
 | A small next step, or continue mid-feature | `/start` |
+| Build or change a screen / component / styling (UI) | `/start` — routes to the **frontend** role (ui-design → ui-review) |
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |

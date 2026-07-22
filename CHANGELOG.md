@@ -4,6 +4,16 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.22] — 2026-07-22
+
+### Added — front-end capability (role + two skills + a11y invariant)
+The kit could plan, build backend/data, review, and ship — but user-facing UI fell to the general `implementer`, which treated a screen like any other code and routinely shipped only the happy path (no loading/empty/error states), hardcoded hex/px that broke theming, and skipped accessibility. This release makes the front-end a first-class concern:
+- **New `frontend` role.** Builds the interface a real person touches — accessible (WCAG: accessible name + role, keyboard-operable, visible focus, `alt`, contrast), responsive (mobile-first), and token-driven (never raw hex/px). Reuses an existing component before inventing one, runs the project's build/lint/tests and quotes the result, and hands structural patterns back to the architect and server/data logic to the implementer.
+- **New `ui-design` skill.** Run after the feature is clear, before writing components: pins the UI contract in plain language — which design tokens (three tiers: primitive → semantic → component), every visual **and** data state (including the loading/empty/error states UI usually forgets), and how it reflows on small screens — so the code can't quietly cut corners.
+- **New `ui-review` skill.** The visual/a11y counterpart to `code-review`: works from a concrete WCAG 2.2 checklist (`references/wcag-checklist.md`) plus missing-state, responsive, and token-drift scans. `code-review` owns correctness/security; this owns accessibility, states, responsiveness, token consistency.
+- **Routing wired in.** The orchestrator now routes user-facing UI to `frontend` (ui-design → ui-review) instead of the general implementer; the command-routing rule sends "build/change a screen/component/styling" to `/start` → frontend.
+- **Next.js profile a11y invariant.** `app/**/*.tsx | components/**/*.tsx` now carry a path-scoped invariant: interactive elements have an accessible name + role, images have `alt`, and data views handle loading/empty/error — the static part enforced by `eslint-plugin-jsx-a11y`, the rest by the `ui-review` skill.
+
 ## [0.1.21] — 2026-07-17
 
 ### Added
