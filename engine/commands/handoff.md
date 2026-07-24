@@ -15,7 +15,7 @@ Turn a finished (or nearly finished) piece of work into a **human-control packag
    - **Acceptance** — copy the criteria; tick only what is actually met, with the proof.
    - **Impact & rollback** — from the **impact-map**: what changed, who depends on it, and the exact steps to undo it safely.
    - **Evidence** — the tests that ran and their result, the reviewer's verdict, and each gate's status (the evidence gate: "done" is shown, not asserted).
-   - **Release** — from **release-check**: migration note, backups, go / no-go.
+   - **Release** — from **release-check** + **`ops-deploy`** when a real env was (or will be) touched: migration note, backups, smoke, **rollback**, go / no-go.
    - **Decision needed** — what the owner must approve (schema / prod / data), or "none."
    - **Summary** — one paragraph they can forward, with links to the PR, the task, and the Decision Log.
 3. If anything is unmet or unproven, **say so plainly at the top** — a handoff that hides a red gate is worse than none.

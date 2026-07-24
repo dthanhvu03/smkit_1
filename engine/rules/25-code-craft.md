@@ -14,13 +14,14 @@ paths:
   - "**/*.py"
   - "**/*.go"
   - "**/*.php"
-title: Code craft — naming, design, OOP
+title: Code craft — naming, design, DRY, layering
 ---
 
 # Code craft — name, design, and structure with intent
 
 Loads when you touch code. Complements the consistency-guard (reuse over reinvention) and
-the stack conventions (casing/layout).
+the stack conventions (casing/layout). Goal: code a competent senior would keep — not a
+pile of one-off scripts.
 
 ## Naming (intention-revealing)
 - A name says WHAT it is / WHY it exists — a reader understands it without reading the
@@ -31,6 +32,8 @@ the stack conventions (casing/layout).
 - Follow the language's standard casing (see the stack conventions) — never hand-invent a
   scheme.
 - A misleading name is a bug: rename as understanding improves.
+- Prefer the **domain glossary** (`domain-model` / constitution) over tech slang for
+  business concepts (`confirmBooking`, not `setStatus2`).
 
 ## Design — the simplest thing that works
 - **YAGNI** — build for today's requirement, not an imagined future. No speculative
@@ -42,6 +45,30 @@ the stack conventions (casing/layout).
   obvious. Don't apply patterns preemptively.
 - **One way per thing** (consistency-guard): reuse the existing approach; record any new
   one in the Decision Log.
+
+## DRY & cohesion — no copy-paste islands
+- **Rule of three (pragmatic):** the second copy is a smell; the **third** identical or
+  near-identical block → extract a shared function/module *now* (or run `refactor`). Two
+  similar blocks that will diverge for real reasons may stay separate — say why.
+- **One home for a business rule.** Authz checks, price/tax math, state transitions, and
+  validation of the same invariant must not be re-implemented in UI + API + job. Put the
+  rule in domain/service (or a shared lib the project already uses) and call it.
+- **Cohesion over scatter.** Code that changes together lives together. Don't sprinkle the
+  same concern across unrelated folders "for convenience." New helpers go next to existing
+  siblings of that kind — not a new top-level junk drawer.
+- **Delete dead code** you replace in the same change when safe; don't leave a second
+  unused path "just in case."
+
+## Layering — boundaries that prevent garbage
+Respect the project's existing layout. When none is recorded yet, prefer this split and
+write it to the Decision Log on first use:
+- **Transport** (HTTP/RPC/UI handlers) — thin: parse, auth context, map errors/status.
+- **Application / use-case** — orchestrate a use case; open transactions here if needed.
+- **Domain** — invariants and legal transitions (`domain-model`); no framework imports if
+  the project already keeps domain pure.
+- **Persistence / adapters** — DB, queues, email; no duplicate business rules.
+Do not invent Clean/Hexagonal ceremony the repo doesn't use — **match house style**. For
+new HTTP surfaces, pin the contract with **`api-design`** before coding handlers.
 
 ## Data & algorithms — fit the shape to the work
 - **Match the container to the access.** Look-up or membership by key — especially inside a
@@ -75,6 +102,7 @@ warning to make it go in. Record a kept dependency in the Decision Log — and n
 second library for a job that already has one (consistency-guard).
 
 > Sources: naming & functions — *Clean Code* (R. C. Martin); SOLID — R. C. Martin;
-> patterns "use when justified" — *Design Patterns* (GoF); casing verified 2026-07-16 —
-> Effective Go (`MixedCaps`, go.dev/doc/effective_go) and PEP 8 (snake_case / CapWords,
+> patterns "use when justified" — *Design Patterns* (GoF); layering — common ports &
+> adapters practice adapted to house style; casing verified 2026-07-16 — Effective Go
+> (`MixedCaps`, go.dev/doc/effective_go) and PEP 8 (snake_case / CapWords,
 > peps.python.org/pep-0008); TypeScript handbook for TS.

@@ -13,8 +13,14 @@ Intent → command:
 |---|---|
 | First use / the constitution is still placeholders | `/onboard` — read the project & fill setup |
 | Deliver a whole feature (idea → shipped) | `/ship` — the full A→Z run |
-| A small next step, or continue mid-feature | `/start` |
+| A small next step, or continue mid-feature | `/start` — or **`/resume`** first if this is a **new chat/session** |
+| New chat / "continue where we left" / pick up mid-feature / afraid of losing context | **`/resume`** — re-read SoT + active task + handoff, restate, then continue |
 | Build or change a screen / component / styling (UI) | `/start` — routes to the **frontend** role (ui-design → ui-review) |
+| Add/change an API / endpoint / route / handler / RPC | **api-design** skill (contract first), then `/start` or `/ship` → **implementer** |
+| Deploy / release to staging or prod / rollback / "ship it live" | **ops-deploy** (+ **release-check**), then **devops** — never skip rollback/smoke |
+| Add or change CI/CD / GitHub Actions / deploy pipeline | **ci-pipeline** skill, then **devops** (ops-surface paths) |
+| Queue / worker / job / outbox / saga / webhook consumer | **async-workflows** skill, then `/start` or `/ship` → **implementer** (async-surface) |
+| Terraform / Pulumi / CDK / infra modules / cloud IaC | **infra-iac** skill, then **devops** (+ **ops-deploy** when applying live) |
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
 | Grow revenue / cut cost / ops pain / prioritize backlog / "is this worth doing?" | **smart-value** skill, then `/discover` |
 | App direction clear but no/stale domain brief · "research the market/competitors" · one-way-door needs domain facts | **domain-research** skill (write `.kit/domain-brief.md`) — not every casual reply |

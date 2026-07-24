@@ -42,3 +42,6 @@ money. Complements code-craft (how to write) and the evidence-gate (prove it).
 > Scale to the mode: `vibe` = the essentials (idempotent retries · timeouts · one error
 > surfaced); `standard` = + guarded shared state and structured logs; `strict` = the full
 > set plus a written failure/rollback plan for the risky path.
+>
+> Queues, workers, outbox, or multi-step sagas → also run the **`async-workflows`** skill
+> (path rule `async-surface`) before implementing — do not invent a second broker.

@@ -22,12 +22,16 @@ name the goal, surface unknowns, list options, pick with a because, and define w
 | `deliberate-then-act` | Gate: think → then act |
 | `brainstorm` | Wide diverge when options are missing |
 | `smart-value` | Business KPI / value scoring |
+| `domain-model` | Entities, states, invariants (one enforcement home) |
+| `api-design` | HTTP/RPC contract before handlers |
+| `async-workflows` | Queue/worker/outbox/saga (opt-in) |
+| `infra-iac` | Terraform/Pulumi/CDK design (opt-in) |
 | `senior-reasoning` | Deep senior pass on a contested pick |
 | `/challenge` + `pre-build-critique` | Safety lenses + critique gate token |
 
 Typical order for a new feature in `strict`:
 `smart-value` (if business) → `deliberate-then-act` → `senior-reasoning` (if contested) →
-`/challenge` → build.
+`domain-model` (if lifecycle) → `api-design` (if API surface) → `/challenge` → build.
 
 ## Anti-patterns (performative thinking)
 - Empty bullets or “looks fine”

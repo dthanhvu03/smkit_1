@@ -4,4 +4,4 @@ claude_intro: "Hướng dẫn agent của dự án. Luật cốt lõi ở .claud
 mode_note_vibe: "Chế độ: vibe — làm nhanh, nói tiếng người, giữ codebase nhất quán. Guardrail luôn bật."
 mode_note_standard: "Chế độ: standard — brief, tự review, chạy test trước khi báo xong."
 mode_note_strict: "Chế độ: strict — full gate; cần người duyệt cho schema/prod/data."
-session_memory_note: "Đọc Constitution (.kit/constitution.md), Decision Log (.kit/decisions.md) và Domain brief (.kit/domain-brief.md) nếu có — tái sử dụng research; không crawl web mỗi câu trả lời."
+session_memory_note: "Đọc Constitution (.kit/constitution.md), Decision Log (.kit/decisions.md), Domain brief (.kit/domain-brief.md) và ACTIVE TASK (.kit/state/current-task → .kit/tasks/<id>.md) nếu có — cùng *-handoff.md mới nhất. Tái sử dụng research; không crawl hay bịa hướng mới mỗi câu. Chat mới giữa feature → /resume."

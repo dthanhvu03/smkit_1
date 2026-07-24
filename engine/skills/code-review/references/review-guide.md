@@ -28,7 +28,18 @@ each hunk to these (ODC "defect type" + common code-review classes):
 - **Data / assignment / checking** — wrong variable, missing validation, type coercion,
   uninitialized value.
 - **Interface / API / contract** — signature or return-shape change, **backward-
-  compatibility break**, wrong argument order, broken callers.
+  compatibility break**, wrong argument order, broken callers. For HTTP/RPC also: wrong
+  status code, inconsistent **error envelope**, missing validation, mutating GET, write
+  without idempotency when retries/money/bookings apply (see `api-design` /
+  `api-surface`).
+- **Duplication / scatter** — the same business rule or validation pasted in 2+ places;
+  a parallel helper that should have reused the existing one; dead leftover path after a
+  rename. Prefer one home + call sites (code-craft DRY).
+- **Domain / business gap** — illegal state transition allowed; invariant only checked in
+  the UI; money/booking rule missing on the server path; glossary name ignored
+  (`domain-model`).
+- **Layering smell** — fat handler with domain rules; persistence leaking into transport
+  DTOs; framework types deep in "domain" when the project keeps them separate.
 - **Timing / concurrency** — race condition, deadlock, non-atomic read-modify-write,
   missing lock/await, order dependency.
 - **Resource / memory** — leak (file/handle/connection not closed), unbounded growth,
@@ -54,6 +65,16 @@ authorization complexity, race conditions, crypto misuse. Prioritize by OWASP ra
 - **A08 Software & Data Integrity Failures** — unsafe deserialization, unverified updates.
 - **A09 Security Logging & Monitoring Failures** — security events logged, secrets NOT.
 - **A10 Server-Side Request Forgery (SSRF)** — user-controlled URLs fetched server-side.
+
+## 3b. API surface checklist (when the diff touches routes/handlers)
+Scan quickly against the project's house style and `api-design` if it ran:
+- [ ] Authz on every sensitive/mutating endpoint (object-level — not just "logged in")
+- [ ] Errors use the **same envelope**; no ad-hoc `{ msg }` one-offs
+- [ ] Success status codes match method semantics (`201` create if that is house style)
+- [ ] List endpoints: pagination/sort stable; filter allow-list respected
+- [ ] No DB/ORM entity dumped as JSON with extra sensitive fields
+- [ ] Breaking field/meaning change called out with migration or version note
+A missing authz on a new write path is at least **major** (often **blocker** under A01).
 
 ## 4. Substance over style — what to deprioritize
 - **Do NOT block on personal style preference.** The formatter/linter and the project's

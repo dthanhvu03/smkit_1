@@ -29,10 +29,14 @@ software — most high-stakes bugs are an illegal state or transition that was n
    total equals its line items; one active subscription per user.
 4. **Commands → events** — the actions that change state (`confirmBooking`, `refundPayment`)
    and what each produces. A command may only move the machine along a **legal** transition.
-5. **Make illegal states unrepresentable** — prefer a shape where a bad state can't even be
+5. **One enforcement home** — each invariant/command has a **single** place in code that
+   owns it (domain/service). UI and API **call** that home; they do not re-implement the
+   rule. If an HTTP surface will expose a command, note it here and hand the transport
+   contract to **`api-design`** (do not design paths/status codes in this skill).
+6. **Make illegal states unrepresentable** — prefer a shape where a bad state can't even be
    built (a discriminated union / status enum with the fields each state requires) over
    runtime checks bolted on afterwards. Design the bug out, don't guard against it.
-6. **Record & enforce** — put the entities, the state diagram (as text), and the invariants
+7. **Record & enforce** — put the entities, the state diagram (as text), and the invariants
    into the task / Decision Log, and add the hard ones to `kit.config.yaml` `invariants:` so
    the guardrail holds the line in every future change.
 
@@ -42,6 +46,8 @@ software — most high-stakes bugs are an illegal state or transition that was n
 ## State machines (states → allowed transitions)
 ## Invariants (always-true, checkable)
 ## Commands → events (each a legal transition)
+## Enforcement home (module/service — one place; UI/API call it)
+## API handoff (none · or list commands needing api-design)
 ## Illegal states designed out
 ## To enforce (invariants for kit.config.yaml)
 ```

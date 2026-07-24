@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
+description: Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, duplicated/scattered logic, API/contract issues, domain gaps, consistency with recorded decisions, and security smells.
 license: Apache-2.0
 compatibility: Requires repository read access and git.
 metadata:

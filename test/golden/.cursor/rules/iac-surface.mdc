@@ -1,0 +1,26 @@
+---
+# GENERATED — DO NOT EDIT. Edit engine/ or kit.config.yaml, then run: kit build
+description: "IaC surface — Terraform, Pulumi, CDK"
+globs: **/*.tf,**/*.tfvars,**/*.tf.json,**/terraform/**,**/pulumi/**,**/Pulumi*.yaml,**/Pulumi*.yml,**/cdk/**,**/cdk.json,**/cdktf/**,**/crossplane/**,**/infra/**,**/infrastructure/**
+alwaysApply: false
+---
+
+# IaC surface — when you touch infrastructure-as-code
+
+Loads on Terraform/Pulumi/CDK/Crossplane/infra module paths. Opt-in depth: app-only repos
+without these folders never see this rule. For apply runbooks use **`ops-deploy`**; for
+workflow YAML use **`ci-pipeline`**; for module/state design use **`infra-iac`**.
+
+## Before writing
+- Run (or confirm) **`infra-iac`**: blast radius, remote state+lock, IAM/secrets, plan/apply
+  approval, stateful protection, rollback.
+- Reuse existing backend/module layout — second state pattern is a consistency stop.
+
+## While implementing
+- No secrets in git (`tfvars`, env files, kubeconfigs).
+- Prefer OIDC / short-lived creds over static keys.
+- Protect stateful resources from casual destroy.
+
+## Before claiming done
+- Prod: plan reviewed + approval path named; rollback noted; link **`ops-deploy`** if
+  applying to a live env in the same change.

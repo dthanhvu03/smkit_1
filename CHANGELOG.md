@@ -4,6 +4,42 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.24] — 2026-07-24
+
+### Added — async-workflows + infra-iac (opt-in depth)
+Keeps the universal kit lean: these load via path rules / explicit asks, not always-on:
+- **`async-workflows` skill** + **`async-surface`** — queues, workers, outbox, saga: message contract, idempotency, retry/DLQ, compensations, duplicate-delivery tests. Skip for simple CRUD.
+- **`infra-iac` skill** + **`iac-surface`** — Terraform/Pulumi/CDK: remote state+lock, blast radius, IAM/secrets, plan/apply approval, stateful protection, rollback. Skip for app-only (no IaC tree).
+- Wired into command-routing, `/ship` Design+Build, implementer, architect, devops, orchestrator; `reliability` and `ops-surface` point here when relevant.
+
+### Added — ops-deploy + ci-pipeline (DevOps depth)
+Release-check gated version/changelog but live deploys and CI YAML still leaned on a thin devops role. This release adds:
+- **`ops-deploy` skill** — env, artifact, ordered runbook (backup → migrate → deploy → smoke), abort criteria, **mandatory rollback**, watch window; fails without rollback or prod approvers when configured.
+- **`ci-pipeline` skill** — design/change GitHub Actions (etc.): triggers, least-privilege permissions, secrets, promote-not-rebuild, prod environment gates.
+- **Path-scoped `ops-surface` rule** — workflows, Docker, k8s/helm/terraform, deploy manifests.
+- **devops role** upgraded (sonnet + effort high); wired into `/ship` Ship stage, orchestrator, command-routing, and `release-check` (ops runbook section).
+
+### Added — session continuity (no drift across chats)
+Agents invent a new direction when chat memory is empty. This release makes **file SoT** mandatory every session:
+- **SessionStart** now injects a continuity banner + **active task** (`.kit/state/current-task`, else newest `in-progress` task) + **latest handoff**, alongside constitution / decisions / domain brief.
+- **New `/resume` command** — re-read SoT, restate In/Out + gates + next slice, confirm before coding; fail closed on scope conflicts.
+- **New always-on `session-continuity` rule** — same discipline on Cursor/Copilot/Windsurf (no SessionStart hook): read files or run `/resume`; do not silently expand Out.
+- Wired into command-routing, `/start`, and `/ship` (**Triage** mid-feature + **Frame** when `current-task` / `in-progress` exists — `/resume` before Discover); i18n session memory notes updated.
+
+### Added — `api-design` skill + `api-surface` rule
+Expert API work was only scattered across review notes and release-check. This release makes the contract first-class:
+- **New `api-design` skill** — pin resources, methods, status codes, **one error envelope**, authz (no IDOR), idempotency for writes, pagination, layering (thin handler → domain → persistence), and compatibility before implementer codes. Quality bar: mutating endpoint without authz, or missing error envelope, fails the skill.
+- **New path-scoped `api-surface` rule** — fires on routes/handlers/controllers/tRPC/GraphQL paths; requires the contract, reuse of middleware/helpers, and evidence for happy + authz/validation paths.
+- **Wired** into command-routing, `/ship` Design+Build, `/start`, orchestrator, architect, implementer, reviewer, and `deliberate-then-act` order (after domain-model when lifecycle applies).
+
+### Improved — clean code, DRY, domain enforcement
+- **`code-craft`** — DRY (rule of three), cohesion vs scatter, pragmatic layering, domain glossary naming.
+- **`consistency-guard`** — stop on second error/API envelope or duplicated business rule; extract/refactor instead of islands.
+- **`domain-model`** — “one enforcement home” + API handoff to `api-design` (rules live once; UI/API call them).
+- **`code-review`** — defect classes for duplication, domain gaps, layering; new §3b API surface checklist.
+- **`refactor` guide** — smells for third copy, UI+API+job rule drift, fat handlers.
+- **Generic profile conventions** — layering + single error envelope.
+
 ## [0.1.23] — 2026-07-24
 
 ### Added — smart domain research (not every reply)

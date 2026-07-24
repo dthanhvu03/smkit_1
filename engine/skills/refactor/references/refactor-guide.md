@@ -18,8 +18,11 @@ changed nothing. Find the **seams** where you can insert tests without a big rew
 ## 3. Smell → refactoring (what to look for, what to apply)
 | Code smell | Typical refactoring |
 |---|---|
+| Duplicated code (3rd near-copy) | Extract Function / Pull Up Method — **do now**; don't wait for a fourth |
+| Same business rule in UI+API+job | Extract to domain/service; call from all three (one enforcement home) |
+| Parallel helper / second envelope | Delete or merge — consistency-guard; do not keep both |
+| Fat handler / god route | Extract application/domain; leave transport thin (`api-design`) |
 | Long function | Extract Function |
-| Duplicated code | Extract Function / Pull Up Method |
 | Long parameter list | Introduce Parameter Object / Preserve Whole Object |
 | Large class | Extract Class |
 | Feature envy (method uses another object's data) | Move Function |

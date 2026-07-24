@@ -1212,7 +1212,7 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
   assert.ok(b.alwaysLoaded.roleCatalog.items.length === 13, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 19, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 24, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);
@@ -1680,6 +1680,7 @@ test("session-start: injects filled domain-brief and labels template-only briefs
   const ctx = JSON.parse(filled.stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /DOMAIN BRIEF \(reuse/, "filled brief is reused, not re-researched");
   assert.match(ctx, /Barber booking/);
+  assert.match(ctx, /SESSION CONTINUITY/, "continuity banner always present");
 
   writeFileSync(join(proj, ".kit", "domain-brief.md"),
     "# Domain brief\n\n## App direction (1–2 sentences)\n<!-- what we are building in this niche -->\n");
@@ -1687,6 +1688,28 @@ test("session-start: injects filled domain-brief and labels template-only briefs
     { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
   const ctx2 = JSON.parse(tmpl.stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx2, /template only/, "placeholder brief nudges domain-research");
+});
+
+test("session-start: injects active task + handoff so mid-feature sessions do not drift", () => {
+  const proj = mkTmp("kit-session-task-");
+  mkdirSync(join(proj, ".kit", "state"), { recursive: true });
+  mkdirSync(join(proj, ".kit", "tasks"), { recursive: true });
+  writeFileSync(join(proj, ".kit", "constitution.md"), "# Product\nBooking app\n");
+  writeFileSync(join(proj, ".kit", "state", "current-task"), "book-slot\n");
+  writeFileSync(join(proj, ".kit", "tasks", "book-slot.md"),
+    "# [TASK-book-slot] Book a slot\n\n- **Status:** in-progress\n\n## Scope\n- **In:** pick a free slot\n- **Out:** payments\n");
+  writeFileSync(join(proj, ".kit", "tasks", "book-slot-handoff.md"),
+    "# Handoff\n\n## 1. What was delivered\nSlot picker UI only.\n");
+  const r = spawnSync(process.execPath, [join(KIT, ".kit", "hooks", "session-start.mjs")],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /ACTIVE TASK/, "active task section present");
+  assert.match(ctx, /pick a free slot/);
+  assert.match(ctx, /Out:\*\* payments|Out: payments/);
+  assert.match(ctx, /LATEST HANDOFF/);
+  assert.match(ctx, /Slot picker UI only/);
+  assert.match(ctx, /do not invent a new product direction/i);
 });
 
 // ---- 0.1.19: Node version guard -------------------------------------------
