@@ -4,4 +4,4 @@ claude_intro: "Project agent instructions. Core rules live in .claude/rules/ (au
 mode_note_vibe: "Mode: vibe — move fast, talk in plain language, keep the codebase consistent. Guardrails are always on."
 mode_note_standard: "Mode: standard — brief, self-review, and tests before done."
 mode_note_strict: "Mode: strict — full gate chain; human approval required for schema/prod/data."
-session_memory_note: "Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md) before coding."
+session_memory_note: "Read the Constitution (.kit/constitution.md), Decision Log (.kit/decisions.md), and Domain brief (.kit/domain-brief.md) when present — reuse research; do not re-crawl the web every reply."

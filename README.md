@@ -34,7 +34,7 @@ That's it: no install, no clone. Other ways if you prefer:
 ```bash
 # Scripted / CI (no prompts):
 npx @zusem/smkit init --name "Barber Booking" --stack generic \
-  --mode vibe --lang en --agents claude,cursor,copilot,windsurf,agentsmd
+  --mode strict --lang en --agents claude,cursor,copilot,windsurf,agentsmd
 
 # Or install the CLI globally:
 npm i -g @zusem/smkit
@@ -205,3 +205,7 @@ Instructions generate in **English by default**; set `language: vi` for Vietname
 ## Status
 
 Early. See [`docs/kit-refactor/`](docs/kit-refactor/) for the design and progress. Contributions of new profiles (Python, Go, …) and agent targets (Copilot, Windsurf) welcome.
+
+### Training the kit (people + DNA + domain skills)
+
+To keep agents strong without bloating always-on context, follow the 4-week path in **[`docs/training/`](docs/training/)** — DNA setup, a 1-page user playbook, domain-skill scaffolds, founder/maintainer curricula, and dogfood/KPI templates.

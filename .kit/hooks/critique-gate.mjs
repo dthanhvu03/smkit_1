@@ -20,12 +20,12 @@ process.stdin.on("end", async () => {
   let decision = "allow";
   let reason = "";
   let relPath = "";
-  let mode = "vibe";
+  let mode = "strict";
   try {
     const input = JSON.parse(raw || "{}");
     const ti = input.tool_input || {};
     relPath = relPathOf(ti.file_path || ti.path || "");
-    mode = (await loadConfig()).mode || "vibe";
+    mode = (await loadConfig()).mode || "strict";
     ({ decision, reason } = critiqueGateDecision({ relPath, mode, hasToken: gateTokenValid() }));
   } catch { decision = "allow"; reason = ""; } // fail open
 

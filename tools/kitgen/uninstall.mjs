@@ -10,7 +10,7 @@
 //   3. kit.config.yaml (+ .bak).
 //
 // It NEVER touches your own content: .kit/constitution.md, .kit/decisions.md,
-// .kit/tasks/, or any file the kit did not generate.
+// .kit/domain-brief.md, .kit/tasks/, or any file the kit did not generate.
 //
 // Flags:  --dry-run  show the plan, change nothing
 //         --yes, -y  skip the confirmation prompt (required when there is no TTY)
@@ -61,14 +61,14 @@ for (const rel of genRels) {
 const SOURCE = [
   "engine", "profiles", "tools/kitgen", ".kit/hooks",
   ".kit/constitution.template.md", ".kit/decisions.template.md",
-  ".kit/task.template.md", ".kit/handoff.template.md",
+  ".kit/task.template.md", ".kit/handoff.template.md", ".kit/domain-brief.template.md",
   ".kit/build-manifest.json", ".kit/.smkit-version", ".kit/state",
   "kit.config.yaml", "kit.config.yaml.bak",
 ];
 const srcRemove = SOURCE.filter((rel) => existsSync(pp(rel)));
 
 // ---- your content — always kept -------------------------------------------
-const PRESERVE = [".kit/constitution.md", ".kit/decisions.md", ".kit/tasks"].filter((rel) => existsSync(pp(rel)));
+const PRESERVE = [".kit/constitution.md", ".kit/decisions.md", ".kit/domain-brief.md", ".kit/tasks"].filter((rel) => existsSync(pp(rel)));
 
 // ---- plan ------------------------------------------------------------------
 console.log(`smkit uninstall — ${PROJECT_DIR}\n`);

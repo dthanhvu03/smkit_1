@@ -28,4 +28,4 @@ A junior answers the checklist — "correctness: looks fine." A senior *reasons*
 ## Recommendation + confidence (low / med / high) + what would raise it
 ```
 
-**Depth bar:** every row carries a *because* and a *consequence*. A section of bare one-liners with no reasoning **fails this skill — redo it**. Scale to the mode: `vibe` = the reframe + the leading option + the non-obvious risk + confidence (still real reasoning, just tighter); `standard` / `strict` = the full set, written down.
+**Depth bar:** every row carries a *because* and a *consequence*. A section of bare one-liners with no reasoning **fails this skill — redo it**. In **`strict`** (kit default) always deliver the **full** output set written down — never compress to a vibe-lite summary. Only if `kit.config.yaml` explicitly sets `mode: vibe` may you tighten to: reframe + leading option + non-obvious risk + confidence (still real because/so-what on every claim).

@@ -1,0 +1,36 @@
+schemaVersion: 1
+id: domain-research
+owner: platform-team
+version: "1.0.0"
+trustTier: T0
+provenance:
+  sourceRef: bundled
+  reviewStatus: approved
+invocation:
+  implicit: true
+  manual: true
+permissions:
+  requestedTools:
+    - read
+    - search
+    - write
+    - network
+  deniedTools:
+    - shell
+  preApprovedTools: []
+execution:
+  network: true
+  executableScripts: false
+relatedRoles:
+  - analyst
+  - orchestrator
+  - planner
+relatedRules:
+  - hard-rules
+  - command-routing
+targets:
+  supported:
+    - claude
+    - cursor
+    - copilot
+    - windsurf

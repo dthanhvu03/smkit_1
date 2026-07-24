@@ -3,7 +3,7 @@
 // (no coding/architecture knowledge needed), then writing config + memory + generating.
 //
 // Interactive:  node tools/kitgen/init.mjs
-// Scripted:     node tools/kitgen/init.mjs --name "My App" --stack nextjs --mode vibe \
+// Scripted:     node tools/kitgen/init.mjs --name "My App" --stack nextjs --mode strict \
 //                 --lang en --agents claude,cursor --purpose "..." --users "..." --never "..."
 // Flags:        --dry-run (show, don't write)  --force (overwrite existing config)  --yes (accept defaults)
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, cpSync } from "node:fs";
@@ -182,7 +182,7 @@ if (rootsFlag) {
   }
 }
 
-answers.mode = await ask({ key: "mode", q: P.mode }, "vibe", ["vibe", "standard", "strict"]);
+answers.mode = await ask({ key: "mode", q: P.mode }, "strict", ["vibe", "standard", "strict"]);
 answers.agents = await ask({ key: "agents", q: P.agents }, detAgents.join(","), KNOWN_AGENTS);
 if (rl) rl.close();
 
@@ -268,6 +268,10 @@ ${answers.never || "<e.g. no destructive database operations in production>"}
 const decisionsSeed = existsSync(kp(".kit", "decisions.template.md"))
   ? readFileSync(kp(".kit", "decisions.template.md"), "utf8")
   : "# Decision Log\n\n> Record non-trivial technical decisions here so future sessions stay consistent.\n";
+
+const domainBriefSeed = existsSync(kp(".kit", "domain-brief.template.md"))
+  ? readFileSync(kp(".kit", "domain-brief.template.md"), "utf8")
+  : "# Domain brief\n\n> Fill via the domain-research skill when the app direction is clear.\n";
 
 // ---- write / dry-run ------------------------------------------------------
 console.log(`\nkit init — ${answers.name}  (stack=${stackLabel}, mode=${answers.mode}, lang=${answers.lang}, agents=${agentsList.join("+")})\n`);
@@ -378,6 +382,7 @@ let constitutionWritten = false;
 for (const [rel, content] of [
   [".kit/constitution.md", constitution],
   [".kit/decisions.md", decisionsSeed],
+  [".kit/domain-brief.md", domainBriefSeed],
   [".gitignore", gitignore],
   [".gitattributes", gitattributes],
   [".github/workflows/kit-check.yml", kitCiWorkflow],

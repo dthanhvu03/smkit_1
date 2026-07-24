@@ -390,6 +390,7 @@ test("init: zero-question init detects stack, agents and name from the project",
   assert.match(cfg, /- go/, "go detected from go.mod");
   assert.match(cfg, /- nextjs/, "nextjs detected from package.json next dep");
   assert.match(cfg, /name: "detected-app"/, "name detected from package.json");
+  assert.match(cfg, /mode: strict/, "default mode is strict (strongest)");
   // agents = safe baseline (claude + agentsmd, never omitted) PLUS the detected .cursor
   assert.match(cfg, /- cursor/, "cursor detected from .cursor/");
   assert.match(cfg, /- claude/, "Claude Code is always in the baseline — never silently dropped");
@@ -835,8 +836,13 @@ test("role: seniority rubric warns on a thin body (heuristic hiring-bar), non-bl
 test("role: emitter maps canonical nested fields to real, verified Claude subagent frontmatter", () => {
   const tmp = copyKit();
   const md = readFileSync(join(tmp, "engine", "roles", "architect.md"), "utf8");
+  // Architect already ships with runtime.effort: high — replace that whole block so we
+  // don't end up with two `runtime:` keys (YAML keeps the last → maxTurns would vanish).
   writeRole(tmp, "architect.md",
-    md.replace("model: opus\n", "model: opus\npermissions:\n  denyTools:\n    - Write\n  mode: plan\nruntime:\n  maxTurns: 15\n  effort: high\n  isolation: worktree\n  background: true\nskills:\n  preload:\n    - code-review\nmemory:\n  scope: project\n"));
+    md.replace(
+      /model: opus\nruntime:\n  effort: high\n/,
+      "model: opus\npermissions:\n  denyTools:\n    - Write\n  mode: plan\nruntime:\n  maxTurns: 15\n  effort: high\n  isolation: worktree\n  background: true\nskills:\n  preload:\n    - code-review\nmemory:\n  scope: project\n",
+    ));
   assert.equal(runKit(tmp, "build").status, 0);
   const out = readFileSync(join(tmp, "out", ".claude", "agents", "architect.md"), "utf8");
   assert.match(out, /disallowedTools: Write/);
@@ -1206,7 +1212,7 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
   assert.ok(b.alwaysLoaded.roleCatalog.items.length === 13, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 16, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 19, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);
@@ -1661,6 +1667,26 @@ test("team: session-start injects per-file decisions from .kit/decisions/", () =
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
   assert.match(ctx, /DECISION RECORDS/, "per-file ADRs are injected");
   assert.match(ctx, /pgx not ORM/);
+});
+
+test("session-start: injects filled domain-brief and labels template-only briefs", () => {
+  const proj = mkTmp("kit-domain-brief-");
+  mkdirSync(join(proj, ".kit"), { recursive: true });
+  writeFileSync(join(proj, ".kit", "constitution.md"), "# C\n");
+  writeFileSync(join(proj, ".kit", "domain-brief.md"),
+    "## App direction\nBarber booking for walk-ins.\n## Brief meta\n- researched_at: 2026-07-24\n- confidence: med\n");
+  const filled = spawnSync(process.execPath, [join(KIT, ".kit", "hooks", "session-start.mjs")],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  const ctx = JSON.parse(filled.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /DOMAIN BRIEF \(reuse/, "filled brief is reused, not re-researched");
+  assert.match(ctx, /Barber booking/);
+
+  writeFileSync(join(proj, ".kit", "domain-brief.md"),
+    "# Domain brief\n\n## App direction (1–2 sentences)\n<!-- what we are building in this niche -->\n");
+  const tmpl = spawnSync(process.execPath, [join(KIT, ".kit", "hooks", "session-start.mjs")],
+    { cwd: proj, env: { ...process.env, CLAUDE_PROJECT_DIR: proj }, encoding: "utf8" });
+  const ctx2 = JSON.parse(tmpl.stdout).hookSpecificOutput.additionalContext;
+  assert.match(ctx2, /template only/, "placeholder brief nudges domain-research");
 });
 
 // ---- 0.1.19: Node version guard -------------------------------------------

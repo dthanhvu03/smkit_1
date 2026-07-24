@@ -1,0 +1,26 @@
+# Paste under kit.config.yaml → invariants: (edit paths/rules to your SoT)
+# Then: smkit build && smkit doctor
+#
+# Each entry should be checkable when that path is touched.
+# Keep constitution lines for rules that cannot be path-scoped.
+
+invariants:
+  # Money
+  - path: "**/payment*/**|**/billing/**|**/checkout/**"
+    rule: "Money mutations go through a single Payment/Billing service; every change has a test; no raw balance writes"
+
+  # Inventory / stock (adapt names to your codebase)
+  - path: "**/inventory*/**|**/stock*/**"
+    rule: "Stock balance changes only via the designated inventory service; movements are append-only; no hard DELETE of movement history"
+
+  # Auth / permissions
+  - path: "**/auth*/**|**/policy*/**|**/permission*/**"
+    rule: "Authorization checked on the server (Policy/middleware); UI hiding a button is not security"
+
+  # PII / public API
+  - path: "**/dto/**|**/api/**/public/**|**/serializers/**"
+    rule: "Public responses use an allowlist of fields; no secrets, tokens, or unnecessary PII"
+
+  # Migrations
+  - path: "**/migrations/**|**/migrate*/**"
+    rule: "Schema change includes migration note + rollback plan; no production migrate without approver sign-off"

@@ -12,7 +12,7 @@ let raw = "";
 process.stdin.on("data", (c) => (raw += c));
 process.stdin.on("end", async () => {
   const [block, cfg] = await Promise.all([loadBlocklist(), loadConfig()]);
-  const mode = cfg.mode || "vibe";
+  const mode = cfg.mode || "strict";
 
   let cmd;
   try {

@@ -28,6 +28,9 @@ Intent → command:
 | A small next step, or continue mid-feature | `/start` |
 | Build or change a screen / component / styling (UI) | `/start` — routes to the **frontend** role (ui-design → ui-review) |
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
+| Grow revenue / cut cost / ops pain / prioritize backlog / "is this worth doing?" | **smart-value** skill, then `/discover` |
+| App direction clear but no/stale domain brief · "research the market/competitors" · one-way-door needs domain facts | **domain-research** skill (write `.kit/domain-brief.md`) — not every casual reply |
+| Non-trivial decision / about to design or code / "think first" | **deliberate-then-act** skill (scratchpad), then `senior-reasoning` if contested |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |
 | Prepare/track a piece of work (scope, plan, impact) | `/task` |

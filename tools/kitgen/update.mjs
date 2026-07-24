@@ -75,12 +75,12 @@ if (cmpVer(newVer, oldVer) < 0 && !FORCE) {
 // Kit-owned = refreshed from the new package. Everything else (config, memory,
 // tasks, .gitignore) is the user's and is left untouched.
 const REPLACE_DIRS = ["engine", "profiles", "tools", join(".kit", "hooks")];
-const REPLACE_FILES = ["constitution.template.md", "decisions.template.md", "task.template.md", "handoff.template.md"]
+const REPLACE_FILES = ["constitution.template.md", "decisions.template.md", "task.template.md", "handoff.template.md", "domain-brief.template.md"]
   .map((f) => join(".kit", f));
 
 console.log(`\nsmkit update — ${oldVer}  →  ${newVer}\n`);
 console.log("  refresh (kit-owned):  engine/  profiles/  tools/  .kit/hooks/  .kit/*.template.md");
-console.log("  keep (yours):         kit.config.yaml  .kit/constitution.md  .kit/decisions.md  .kit/tasks/  .gitignore\n");
+console.log("  keep (yours):         kit.config.yaml  .kit/constitution.md  .kit/decisions.md  .kit/domain-brief.md  .kit/tasks/  .gitignore\n");
 
 // Whether the project's installed kit-owned files are byte-identical to this package.
 // Trusting the version STAMP alone is fragile — a stamp can advance while the source

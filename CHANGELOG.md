@@ -4,6 +4,25 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.23] — 2026-07-24
+
+### Added — smart domain research (not every reply)
+Universal apps need domain grounding without crawling the web on every answer. New **`domain-research`** skill writes/refreshes `.kit/domain-brief.md` only on triggers: direction confirmed (`/onboard`), `/discover` / `smart-value` when market facts matter, one-way-door choices, stale brief (~90d), or explicit user ask. **SessionStart** injects the brief for reuse. Template `.kit/domain-brief.template.md` is seeded on init; uninstall/update preserve the filled brief. Wired into onboard, discover, ship Design, analyst, smart-value, deliberate-then-act, and command-routing.
+
+### Added — deliberate-then-act (external "model thinking" protocol)
+Reasoning models separate thinking from answering; agents often skip straight to code. New skill **`deliberate-then-act`**: mandatory scratchpad (goal · unknowns · options · pick · stop-conditions) before non-trivial design/code; pairs with `senior-reasoning` for depth. Wired into command-routing, orchestrator, `/ship` Design, `/challenge`, `/start`, and implementer. **`senior-reasoning`** in `strict` always requires the full output (no vibe-lite). Decision-heavy Claude roles (**analyst**, **architect**, **reviewer**, **debugger**) now set `runtime.effort: high`.
+
+### Added — training program (`docs/training/`)
+A full path to train people and deepen the agent without always-on bloat: 4-week DNA → user playbook → domain-skill guide → dogfood/KPIs; founder (2–3h) and maintainer (1–2d) curricula; copy-paste templates (invariants starter, domain-skill scaffold, dogfood log, KPI scorecard). Linked from the README Status section. Shipped in the npm package under `docs/training/`.
+
+### Changed — default mode is `strict`
+Installs and missing-mode fallbacks no longer land on `vibe`. `smkit init` (zero-question and interview default), hook fallbacks (`guard-shell`, `critique-gate`), and the shipped `kit.config.yaml` all use **`strict`** — full gates, human approval for schema/prod/data. Pass `--mode vibe` explicitly if you want the light path. `smart-value` always requires the full scored table (no vibe-lite compression).
+
+### Added — `smart-value` skill (business outcome before build)
+The kit could reframe problems (`decision-brief`) and reason like a senior engineer (`senior-reasoning`), but a business ask often jumped to features without a measurable KPI, a named root cause, or scored alternatives that include *do nothing* / no-code workarounds. This release adds the business lens:
+- **New `smart-value` skill** — pin a KPI/proxy outcome + time window, separate symptom from cause (5 Whys / one-level MECE), name value levers (revenue · cost · risk · ops speed · CX), score ≥3 options with Impact×Effort + Cost of Delay (must include do-nothing and a no-code workaround), and define the smallest value slice. Quality bar: missing KPI/proxy or do-nothing fails the skill.
+- **Wired into the pipeline** — analyst runs it before `decision-brief` when value is unclear; `/discover` after brainstorm; `/ship` Design before domain-model for business-outcome features; command-routing sends revenue/cost/ops/backlog-priority asks to `smart-value` → `/discover`.
+
 ## [0.1.22] — 2026-07-22
 
 ### Added — front-end capability (role + two skills + a11y invariant)

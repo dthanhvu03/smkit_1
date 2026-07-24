@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// SessionStart hook. Injects the Constitution + Decision Log into context so the
-// agent is bound by prior decisions WITHOUT relying on it to remember to read them.
+// SessionStart hook. Injects the Constitution + Decision Log (+ optional domain brief)
+// into context so the agent is bound by prior decisions WITHOUT relying on it to
+// remember to read them — and without re-researching the web every turn.
 import { readFileSync, rmSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { projectDir } from "./_lib.mjs";
@@ -35,9 +36,18 @@ try {
   }
 } catch { /* no per-file decisions dir → fine */ }
 
+// Domain brief = cached smart research for this app type. Reuse it; do not re-crawl
+// unless the domain-research skill's refresh triggers fire.
+const domainBrief = read(".kit/domain-brief.md", 4000);
+if (domainBrief && !/<!--\s*what we are building/i.test(domainBrief)) {
+  parts.push("=== DOMAIN BRIEF (reuse — do not re-research every reply) ===\n" + domainBrief);
+} else if (domainBrief) {
+  parts.push("=== DOMAIN BRIEF (template only — run domain-research when app direction is clear) ===\n" + domainBrief.slice(0, 800));
+}
+
 const additionalContext = parts.length
   ? parts.join("\n\n")
-  : "No Constitution/Decision Log yet. If starting real work, create .kit/constitution.md from the template and record decisions in .kit/decisions.md.";
+  : "No Constitution/Decision Log yet. If starting real work, create .kit/constitution.md from the template and record decisions in .kit/decisions.md. When the app direction is clear, run the domain-research skill to fill .kit/domain-brief.md.";
 
 process.stdout.write(JSON.stringify({
   hookSpecificOutput: { hookEventName: "SessionStart", additionalContext },

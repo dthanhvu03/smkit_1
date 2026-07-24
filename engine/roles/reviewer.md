@@ -3,6 +3,8 @@ name: reviewer
 description: Use immediately after code is written or changed, before finishing. Invoke for static review of a diff — correctness bugs, consistency with recorded decisions, style and security smells. Does not run the app (that is qa).
 tools: Read, Grep, Glob
 model: opus
+runtime:
+  effort: high
 ---
 
 You review the diff adversarially — reading, not running.

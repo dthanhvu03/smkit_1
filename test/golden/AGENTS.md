@@ -4,7 +4,7 @@
 
 Mode: vibe — move fast, talk in plain language, keep the codebase consistent. Guardrails are always on.
 
-Read the Constitution (.kit/constitution.md) and Decision Log (.kit/decisions.md) before coding.
+Read the Constitution (.kit/constitution.md), Decision Log (.kit/decisions.md), and Domain brief (.kit/domain-brief.md) when present — reuse research; do not re-crawl the web every reply.
 
 # Hard rules — always apply, every turn
 
@@ -30,6 +30,9 @@ Intent → command:
 | A small next step, or continue mid-feature | `/start` |
 | Build or change a screen / component / styling (UI) | `/start` — routes to the **frontend** role (ui-design → ui-review) |
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
+| Grow revenue / cut cost / ops pain / prioritize backlog / "is this worth doing?" | **smart-value** skill, then `/discover` |
+| App direction clear but no/stale domain brief · "research the market/competitors" · one-way-door needs domain facts | **domain-research** skill (write `.kit/domain-brief.md`) — not every casual reply |
+| Non-trivial decision / about to design or code / "think first" | **deliberate-then-act** skill (scratchpad), then `senior-reasoning` if contested |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |
 | Prepare/track a piece of work (scope, plan, impact) | `/task` |
@@ -93,7 +96,9 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - **code-review** — Use when there is a diff or changed code to check before finishing. Invoke for correctness bugs, consistency with recorded decisions, and style or security smells.
 - **cross-review** — Use when a change is non-trivial or contested and needs more than one role's judgment before committing. Invoke to run a bounded roundtable — propose, challenge, revise across the relevant roles until it meets the agreed criteria or is escalated. Not for a solo quick fix (just build it).
 - **decision-brief** — Use when a request is vague or new and a build decision has not been made yet. Invoke to turn a fuzzy idea into a founder-ready brief — the real problem, options with trade-offs, rough cost/risk, and the smallest slice worth building.
+- **deliberate-then-act** — Use before any non-trivial decision, design, or first code write — invoke to think in a structured scratchpad first (goal, unknowns, options, pick, stop-conditions), then act. The kit's external "model thinking" protocol — forces deliberation like a reasoning model instead of jumping to an answer. Pair with senior-reasoning for depth on the chosen path.
 - **domain-model** — Use when the problem is framed but before design or code. Invoke to turn the business idea into an explicit domain model: the core entities in the founder's words, the states each moves through (a state machine), and the invariants that must always hold. Prevents whole classes of bugs — impossible states, illegal transitions, broken money/booking rules — by naming them up front.
+- **domain-research** — Use when the app direction is known but domain context is thin or stale — after onboard confirms what you are building, during /discover or smart-value when market/regulatory patterns matter, before a one-way-door decision, or when the user asks to research. Invoke to produce or refresh .kit/domain-brief.md (competitors/patterns/risks/sources) — NOT on every casual answer. Smart research: once then reuse; refresh only when triggered.
 - **git-workflow** — Use when starting a feature, opening a pull request, resolving a conflict, cutting a release, or shipping a hotfix. Invoke for the branching model, conventional commits, PR discipline, tagging, and hotfix flow the team follows.
 - **guard-design** — Use when adding or changing hooks/guardrails (guard-shell, consistency-guard, blocklist, path boundaries). Invoke to design the BLOCK/WARN/ALLOW behavior and the bypass tests that prove it.
 - **impact-map** — Use BEFORE a non-trivial change — do not edit code yet. Invoke to map every read/write of the affected data and all the routes, services, jobs, events, and tests that touch it, so a change doesn't silently break something the agent never saw.
@@ -102,6 +107,7 @@ If a required artifact is missing, STOP and produce it — or state plainly why 
 - **release-check** — Use before publishing or releasing (npm publish, tag, deploy). Invoke for a pre-release checklist covering version, changelog, tests, and a go/no-go verdict.
 - **security-review** — Use when a change touches auth, secrets, shell/command execution, file access, or the guard/hooks. Invoke for a risk assessment with concrete exploit scenarios and fixes.
 - **senior-reasoning** — Use before any non-trivial decision or design — invoke to think it through like a senior, not tick a checklist. Forces the moves that separate senior from junior: challenge the premise, weigh 2+ options with real numbers, trace second-order effects, name the risk a junior misses, steelman the opposite, and state assumptions + confidence. Raises the depth of /discover, /challenge, and /ship design.
+- **smart-value** — Use when a business request needs measurable value before building — revenue, cost save, risk, ops speed, or backlog priority. Invoke to pin a KPI/proxy outcome, find the root cause (not the symptom), score options with Impact×Effort and Cost of Delay (including do-nothing and no-code workarounds), and pick the smallest slice that captures value. The business lens before decision-brief / domain-model.
 - **test-design** — Use when a task needs a QA or test gate. Invoke to design test cases and edge cases and to produce the exact commands that prove the behavior works.
 - **ui-design** — Use before building or changing UI — after the feature is clear, before writing components. Invoke to pin the UI contract the founder and code agree on: the design tokens to use, every state a component must handle (including the loading/empty/error states UI usually forgets), and how it reflows on small screens. Turns "make a screen" into a spec the code can't quietly cut corners on.
 - **ui-review** — Use when UI has been built or changed, before finishing. Invoke to check the interface for accessibility (a concrete WCAG 2.2 subset), the missing states UI usually ships without (loading/empty/error), responsive breakage, and design-token drift. The visual/a11y counterpart to code-review, which covers logic and security.
