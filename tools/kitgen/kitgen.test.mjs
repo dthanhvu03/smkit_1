@@ -1212,7 +1212,7 @@ test("estimateTokenBudget: itemizes always-loaded vs on-demand, labels itself as
   assert.ok(b.alwaysLoaded.total > 0);
   assert.ok(b.alwaysLoaded.rules.tokens >= 0 && b.onDemand.pathScopedRules.tokens >= 0);
   assert.ok(b.alwaysLoaded.roleCatalog.items.length === 13, "one catalog item per shipped role");
-  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 24, "one catalog item per shipped skill");
+  assert.ok(b.alwaysLoaded.skillCatalog.items.length === 25, "one catalog item per shipped skill");
   // sanity: on-demand skill bodies must be larger than the always-loaded skill catalog
   // (full instructions vs name+description only) — proves the tiers are real, not equal.
   assert.ok(b.onDemand.skillBodies.tokens > b.alwaysLoaded.skillCatalog.tokens);
@@ -1647,14 +1647,17 @@ test("team: init writes .gitattributes (LF) + kit-check CI, never clobbering", (
   assert.match(ga, /eol=lf/, "pins LF for cross-OS integrity");
   assert.match(ga, /linguist-generated/, "marks generated config");
   assert.match(readFileSync(join(proj, ".github", "workflows", "kit-check.yml"), "utf8"), /kitgen\.mjs check/, "CI checks sync");
+  assert.match(readFileSync(join(proj, ".github", "workflows", "kit-security.yml"), "utf8"), /gitleaks|trivy|npm audit/i, "security CI seeded");
 
   const proj2 = mkTmp("kit-team2-");
   mkdirSync(join(proj2, ".github", "workflows"), { recursive: true });
   writeFileSync(join(proj2, ".gitattributes"), "MINE\n");
   writeFileSync(join(proj2, ".github", "workflows", "kit-check.yml"), "MINE-CI\n");
+  writeFileSync(join(proj2, ".github", "workflows", "kit-security.yml"), "MINE-SEC\n");
   runInit(proj2, "--name", "T2", "--stack", "generic", "--mode", "vibe", "--lang", "en", "--agents", "claude");
   assert.equal(readFileSync(join(proj2, ".gitattributes"), "utf8"), "MINE\n", "existing .gitattributes kept");
   assert.equal(readFileSync(join(proj2, ".github", "workflows", "kit-check.yml"), "utf8"), "MINE-CI\n", "existing CI kept");
+  assert.equal(readFileSync(join(proj2, ".github", "workflows", "kit-security.yml"), "utf8"), "MINE-SEC\n", "existing security CI kept");
 });
 
 test("team: session-start injects per-file decisions from .kit/decisions/", () => {

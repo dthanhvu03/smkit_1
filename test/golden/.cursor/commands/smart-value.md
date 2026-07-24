@@ -33,6 +33,11 @@ stale, run **`domain-research`** first — then score; do not invent market fact
 
 ## Output format (required)
 ```md
+## Thinking lenses
+- **Systems:** …
+- **Critical:** …
+- **Quantitative:** … (feeds the KPI/scores below)
+- **Communication:** … (audience · so-what)
 ## Business outcome (KPI / proxy + time window)
 ## Root cause (symptom → cause; one sentence)
 ## Value lever(s)
@@ -46,6 +51,6 @@ stale, run **`domain-research`** first — then score; do not invent market fact
 ```
 
 **Quality bar:** missing a KPI/proxy (even an estimate with a measurement plan), or missing a
-**do-nothing** option in the scored table, **fails this skill — redo it**. Always deliver the
-**full** table and confidence block (kit default is `strict`) — do not compress to a vibe-lite
-summary.
+**do-nothing** option in the scored table, or missing **Thinking lenses**, **fails this skill —
+redo it**. Always deliver the **full** table and confidence block (kit default is `strict`) —
+do not compress to a vibe-lite summary.

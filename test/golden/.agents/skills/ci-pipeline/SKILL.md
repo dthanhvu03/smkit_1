@@ -31,11 +31,15 @@ the human/runbook side of a prod change; this skill owns the **automated** path.
    per house style.
 4. **Secrets & permissions.** Least privilege (`permissions:` block). No secrets in
    forks/PRs from untrusted sources. Never echo secrets; mask them.
-5. **Deploy jobs.** Separate from PR checks. Prod deploy requires protection rules /
+5. **Security scanner jobs (recommended).** Add or extend jobs for dependency audit,
+   secret scan (gitleaks), and FS/image scan (Trivy) — see `references/ci-guide.md` §8.
+   Prefer the seeded `kit-security.yml` pattern; do not invent a second parallel security
+   pipeline. Scanners ≠ `security-review` (logic/authz).
+6. **Deploy jobs.** Separate from PR checks. Prod deploy requires protection rules /
    environment approval / manual gate when the project has approvers. Artifact promotion
    (same digest) over rebuild-on-prod. Wire to **`ops-deploy`** runbook for smoke/rollback
    expectations.
-6. **Record.** Note new required checks and secret names (not values) in the Decision Log
+7. **Record.** Note new required checks and secret names (not values) in the Decision Log
    / task so the next change reuses them.
 
 ## Output format (required)
@@ -44,6 +48,7 @@ the human/runbook side of a prod change; this skill owns the **automated** path.
 ## Existing CI reused / extended
 ## Triggers & path filters
 ## Jobs (order · fail-fast · caches)
+## Security scanners (audit · secrets · Trivy — present / planned / n/a)
 ## Secrets & permissions (names only; least privilege)
 ## Deploy / promote rules (if any)
 ## Required checks for merge
@@ -53,4 +58,4 @@ the human/runbook side of a prod change; this skill owns the **automated** path.
 **Quality bar:** a **prod deploy** job without an approval/environment gate (when
 `approvers.prod_deploy` is non-empty) or a workflow that **prints secrets** **fails —
 redo**. `vibe` = jobs + triggers + secrets note; `strict` = full permissions, required
-checks, and deploy gating.
+checks, deploy gating, and an explicit security-scanner plan (or documented n/a).

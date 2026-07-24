@@ -52,12 +52,13 @@ Intent → command:
 | Stuck / need many ideas / no obvious approach yet | **brainstorm** skill (diverge wide), then `/discover` to decide |
 | Grow revenue / cut cost / ops pain / prioritize backlog / "is this worth doing?" | **smart-value** skill, then `/discover` |
 | App direction clear but no/stale domain brief · "research the market/competitors" · one-way-door needs domain facts | **domain-research** skill (write `.kit/domain-brief.md`) — not every casual reply |
-| Non-trivial decision / about to design or code / "think first" | **deliberate-then-act** skill (scratchpad), then `senior-reasoning` if contested |
+| Non-trivial decision / about to design or code / "think first" | **deliberate-then-act** + **thinking-lenses**, then `senior-reasoning` if contested |
 | "Should we build this? what are the options?" (vague / new) | `/discover` |
 | "Is this change safe?" before coding | `/challenge` |
 | Prepare/track a piece of work (scope, plan, impact) | `/task` |
 | A contested or non-trivial choice between roles | `/roundtable` |
-| Look at a diff / code without building | `/review` |
+| Look at a diff / code without building | `/review` — add **security-review** if auth/money/PII/secrets/shell |
+| Security review / "is this safe?" / threat model a change | **security-review** skill (OWASP/STRIDE); pair CI scanners via **ci-pipeline** |
 | Check the project for inconsistency / drift | `/checkup` |
 | Record a decision that was made | `/decide` |
 | Something broke / a bug shipped — learn from it | `/postmortem` |
@@ -83,10 +84,14 @@ Rules of thumb:
 ## Required artifacts by risk (completeness)
 Some change types are not "done" until a specific artifact exists — this is **not optional**, it is part of the gate:
 - **Schema / data-shape change** → a **migration note AND a rollback step** (in the task / handoff). No migration note → not ready to ship.
-- **Money, authentication, or personal-data (PII) touch** → a plain-language **business walkthrough AND a second review pass**. These carry real-world risk; a bare diff is not enough.
+- **Money, authentication, or personal-data (PII) touch** → a plain-language **business walkthrough**, a **second review pass**, AND a filled **`security-review`** output (attack surface · exploit scenarios · verdict). A bare diff or "looks fine" is not enough.
+- **Auth, secrets, shell/command execution, file-path from user input, or new network fetch of user URLs** → **`security-review`** required even if not money/PII (same output bar).
 - **Destructive or irreversible operation** → the **reversible / backed-up step is written down** before it runs.
 
 If a required artifact is missing, STOP and produce it — or state plainly why it does not apply — before shipping. This mirrors the task file's **Gate status** checklist; keep the two in sync.
+
+## Scanners vs kit review (hybrid)
+The kit's `security-review` catches **logic / authz / design** flaws scanners miss. Dependency CVEs, leaked secrets, and known vulnerable packages belong in **CI** (`ci-pipeline` → kit-security workflow: audit · gitleaks · Trivy). Do not claim "no vulns" from markdown review alone when CI scanners were skipped without saying so.
 
 # Conventions (generic profile)
 

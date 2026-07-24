@@ -23,10 +23,16 @@ solution framing, Jobs-to-be-Done, MVP/smallest-slice, reversible vs irreversibl
 3. **Size it roughly** — effort, cost, and the risk most likely to make it a waste. Label every number an estimate; never present a guess as a fact.
 4. **Classify reversibility** — is this a **two-way door** (cheap to undo → decide fast, don't over-analyze) or a **one-way door** (hard/expensive to reverse — a database, a data model, a pricing model, a public API → decide deliberately, and note the exit cost)? Spend the founder's attention where it's actually one-way.
 5. **Isolate the founder's decision** — the one or two questions only they can answer (budget, audience, acceptable risk), asked in plain language.
-6. **Recommend** one option and define what "done" looks like in a sentence they would accept.
+6. **Thinking lenses** — embed the **`thinking-lenses`** block (systems · critical · quantitative · communication) so the brief is not craft-only.
+7. **Recommend** one option and define what "done" looks like in a sentence they would accept.
 
 ## Output format (required)
 ```md
+## Thinking lenses
+- **Systems:** …
+- **Critical:** …
+- **Quantitative:** … (estimate + basis · how we measure)
+- **Communication:** … (audience = founder · so-what)
 ## The real problem
 ## Who it's for (and the job they're hiring it to do)
 ## Options
@@ -39,4 +45,4 @@ solution framing, Jobs-to-be-Done, MVP/smallest-slice, reversible vs irreversibl
 ## Recommendation
 ## What "done" looks like
 ```
-Empty **Options** or **Recommendation** fails the evidence gate — a brief with no real choice is not a decision. Keep the whole thing in plain, non-technical language.
+Empty **Options** or **Recommendation**, or missing **Thinking lenses**, fails the evidence gate — a brief with no real choice or one-sided thinking is not a decision. Keep the whole thing in plain, non-technical language for the founder audience.

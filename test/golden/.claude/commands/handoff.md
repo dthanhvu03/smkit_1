@@ -13,10 +13,10 @@ Turn a finished (or nearly finished) piece of work into a **human-control packag
    - **What was delivered** — plain language, what the owner can now see or do (no jargon).
    - **Acceptance** — copy the criteria; tick only what is actually met, with the proof.
    - **Impact & rollback** — from the **impact-map**: what changed, who depends on it, and the exact steps to undo it safely.
-   - **Evidence** — the tests that ran and their result, the reviewer's verdict, and each gate's status (the evidence gate: "done" is shown, not asserted).
-   - **Release** — from **release-check** + **`ops-deploy`** when a real env was (or will be) touched: migration note, backups, smoke, **rollback**, go / no-go.
+   - **Evidence** — the tests that ran and their result, the reviewer's verdict, **`security-review`** when required (money/auth/PII/…), and each gate's status (the evidence gate: "done" is shown, not asserted).
+   - **Release** — from **release-check** + **`ops-deploy`** when a real env was (or will be) touched: migration note, backups, smoke, **rollback**, go / no-go. Quote **CI security** jobs (audit/gitleaks/Trivy) when present.
    - **Decision needed** — what the owner must approve (schema / prod / data), or "none."
-   - **Summary** — one paragraph they can forward, with links to the PR, the task, and the Decision Log.
+   - **Summary** — one paragraph they can forward, with links to the PR, the task, and the Decision Log. Lead with **Communication** so-what (audience = owner); include the **Thinking lenses** block if a non-trivial decision was made this delivery.
 3. If anything is unmet or unproven, **say so plainly at the top** — a handoff that hides a red gate is worse than none.
 4. Scale to the mode: `vibe` = a short walkthrough + what to check + how to undo; `standard` / `strict` = the full package; `strict` may also split the evidence into separate files under `.kit/tasks/<id>/` for an auditable trail.
 

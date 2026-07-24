@@ -14,11 +14,18 @@ Work from **[references/security-guide.md](references/security-guide.md)** — t
 categories, the OWASP Top 10 (2021) prioritized checklist (access-control first), the CWE
 high-frequency patterns, and the ASVS depth cues — as your checklist, not memory.
 
+This skill is the **human/agent logic review**. It does **not** replace CI scanners
+(dependency CVE, secret leak, filesystem vulns). Point founders at **`ci-pipeline`** /
+`.github/workflows/kit-security.yml` for those; quote scanner results in evidence when they
+exist. For money/auth/PII (and related surfaces), the evidence gate **requires** this skill's
+full output — scanners alone are not enough.
+
 ## Workflow
 1. Map the **attack surface** the change adds or widens (inputs, commands run, files/paths read or written, network calls, secrets in scope). Walk it through **STRIDE** and the **OWASP Top 10** (§2–§3 of the reference).
 2. For each risk, write a concrete **exploit scenario** (inputs/state → bad outcome), not a vague concern.
 3. Check the guardrails: does the guard/hook actually block this, or is it only a markdown rule? Note gaps.
-4. Recommend fixes and the tests that would prove them.
+4. Note complementary **CI scanner** status (ran / skipped / not configured) — do not invent a green audit.
+5. Recommend fixes and the tests that would prove them.
 
 ## Output format (required)
 ```md
@@ -27,7 +34,8 @@ high-frequency patterns, and the ASVS depth cues — as your checklist, not memo
 | Severity | Risk | Evidence (file:line) | Exploit scenario | Fix |
 |---|---|---|---|---|
 ## Guardrail gaps
+## CI scanners (audit · secrets · Trivy — ran / n/a)
 ## Recommended tests
 ## Verdict (safe to ship / fix first)
 ```
-Position the guard honestly: hooks are damage-control, not isolation — the real boundary is the OS sandbox.
+Position the guard honestly: hooks are damage-control, not isolation — the real boundary is the OS sandbox. An empty **Risks** table with no exploit scenarios on a money/auth/PII change **fails** this skill.

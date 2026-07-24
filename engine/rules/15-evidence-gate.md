@@ -17,7 +17,11 @@ title: Evidence gate (no unverified "done")
 ## Required artifacts by risk (completeness)
 Some change types are not "done" until a specific artifact exists — this is **not optional**, it is part of the gate:
 - **Schema / data-shape change** → a **migration note AND a rollback step** (in the task / handoff). No migration note → not ready to ship.
-- **Money, authentication, or personal-data (PII) touch** → a plain-language **business walkthrough AND a second review pass**. These carry real-world risk; a bare diff is not enough.
+- **Money, authentication, or personal-data (PII) touch** → a plain-language **business walkthrough**, a **second review pass**, AND a filled **`security-review`** output (attack surface · exploit scenarios · verdict). A bare diff or "looks fine" is not enough.
+- **Auth, secrets, shell/command execution, file-path from user input, or new network fetch of user URLs** → **`security-review`** required even if not money/PII (same output bar).
 - **Destructive or irreversible operation** → the **reversible / backed-up step is written down** before it runs.
 
 If a required artifact is missing, STOP and produce it — or state plainly why it does not apply — before shipping. This mirrors the task file's **Gate status** checklist; keep the two in sync.
+
+## Scanners vs kit review (hybrid)
+The kit's `security-review` catches **logic / authz / design** flaws scanners miss. Dependency CVEs, leaked secrets, and known vulnerable packages belong in **CI** (`ci-pipeline` → kit-security workflow: audit · gitleaks · Trivy). Do not claim "no vulns" from markdown review alone when CI scanners were skipped without saying so.

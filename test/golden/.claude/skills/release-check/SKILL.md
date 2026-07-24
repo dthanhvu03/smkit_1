@@ -20,7 +20,8 @@ a Changelog format, safe-rollout (reversible/canary/hermetic), and the full chec
 4. Confirm the generated config is in sync (`smkit check`) and `smkit doctor` is clean (including the hook **integrity** check).
 5. **Guardrail-compliance check** (the soft-rule eval — see `docs/enforcement-and-evals.md`): for the change being shipped, confirm the kit's own process was actually followed — a critique gate token existed before code (`standard`/`strict`), the evidence gate is satisfied (tests run and quoted), no invariant was violated, and real decisions were logged (ADR). Skim `.kit/audit.log` for any `block`/`deny` that was worked around. A miss here is a process gap to fix, not a formality.
 6. If this release **deploys to a real environment**, require an **`ops-deploy`** runbook (rollback + smoke) before go — or mark deploy as out-of-scope for this tag.
-7. Give an explicit go / no-go.
+7. If the change touches **money/auth/PII/secrets/shell**, confirm a filled **`security-review`** exists; quote CI scanner jobs (`kit-security` / audit / gitleaks / Trivy) when configured, or say they are n/a.
+8. Give an explicit go / no-go.
 
 ## Output format (required)
 ```md
@@ -29,6 +30,7 @@ a Changelog format, safe-rollout (reversible/canary/hermetic), and the full chec
 |---|---|---|
 ## Version + changelog
 ## Test / build evidence
+## Security (security-review · CI scanners — or n/a + why)
 ## Ops deploy (n/a · or link runbook / smoke / rollback)
 ## Risks / blockers
 ## Verdict (go / no-go)

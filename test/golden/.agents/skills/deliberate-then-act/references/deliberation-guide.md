@@ -20,6 +20,7 @@ name the goal, surface unknowns, list options, pick with a because, and define w
 | Skill | Job |
 |-------|-----|
 | `deliberate-then-act` | Gate: think → then act |
+| `thinking-lenses` | Systems · critical · quantitative · communication (required cross-cut) |
 | `brainstorm` | Wide diverge when options are missing |
 | `smart-value` | Business KPI / value scoring |
 | `domain-model` | Entities, states, invariants (one enforcement home) |
@@ -30,8 +31,9 @@ name the goal, surface unknowns, list options, pick with a because, and define w
 | `/challenge` + `pre-build-critique` | Safety lenses + critique gate token |
 
 Typical order for a new feature in `strict`:
-`smart-value` (if business) → `deliberate-then-act` → `senior-reasoning` (if contested) →
-`domain-model` (if lifecycle) → `api-design` (if API surface) → `/challenge` → build.
+`smart-value` (if business) → `deliberate-then-act` + **`thinking-lenses`** →
+`senior-reasoning` (if contested) → `domain-model` (if lifecycle) → `api-design` (if API) →
+`/challenge` → build.
 
 ## Anti-patterns (performative thinking)
 - Empty bullets or “looks fine”

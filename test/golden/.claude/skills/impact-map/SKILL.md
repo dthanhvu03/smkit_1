@@ -26,6 +26,9 @@ edit code.**
    listeners/observers, DB triggers, caches, and other services/APIs.
 5. List the **tests** that cover any of the above.
 6. Flag any **invariant** (from kit.config.yaml) or Decision-Log entry the change touches.
+7. **Systems beyond files** — who else feels this (ops · CX · finance · partner)? Any feedback
+   loop (success increases load, queue depth, support volume)? Note delayed effects. (Feeds
+   the **Systems** line of **`thinking-lenses`**.)
 
 ## Output format (required)
 ```md
@@ -33,6 +36,7 @@ edit code.**
 ## Reads / writes (file:line)
 ## Callers & callees affected
 ## Cross-cutting (jobs · events · cron · triggers · cache · other services)
+## Who else feels this (ops · CX · other teams) & feedback / delayed effects
 ## Tests covering it
 ## Invariants / decisions touched
 ## Risk & smallest safe order

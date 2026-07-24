@@ -14,10 +14,11 @@
 - [ ] **Challenge** (pre-build critique) — <verdict: go / adjust / stop>
 - [ ] **Impact map** done (required if it touches shared data/behaviour)
 - [ ] **Review** (correctness + consistency)
+- [ ] **Security review** — required for money/auth/PII/secrets/shell/user paths·URLs; else n/a + why
 - [ ] **Tests** pass (name the actual test file(s) + the command output; a tick with no real test file = RED, not green)
-- [ ] **Required artifacts** present (schema → migration + rollback; money/auth/PII → walkthrough + 2nd review)
+- [ ] **Required artifacts** present (schema → migration + rollback; money/auth/PII → walkthrough + 2nd review + security-review)
 - [ ] **Approval** (schema / prod / data) — or n/a
-
+- [ ] **CI security** (audit / gitleaks / Trivy) — quote job or n/a if no workflow yet
 ## Scope
 - **In:** <what this task delivers — one or two lines>
 - **Out:** <what is explicitly NOT in this task, so it doesn't grow>

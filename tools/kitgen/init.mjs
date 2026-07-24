@@ -376,6 +376,55 @@ jobs:
         run: node tools/kitgen/kitgen.mjs doctor
 `;
 
+// Optional security scanners (deps · secrets · FS). Complements agent security-review —
+// does NOT replace OWASP/authz review. Never clobber if the file already exists.
+const kitSecurityWorkflow = `# Optional security scanners. Edit/remove freely.
+# Pair with the kit's security-review skill for authz/business-logic (scanners miss those).
+name: kit-security
+on:
+  pull_request:
+  push:
+    branches: [main, master, dev]
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+  deps-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm audit (skip if no lockfile)
+        run: |
+          if [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            npm ci --ignore-scripts
+            npm audit --audit-level=high
+          else
+            echo "No npm lockfile — skip npm audit (add pip-audit/govulncheck for other stacks)."
+          fi
+  fs-vulns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+`;
+
 // Memory files + .gitignore/.gitattributes + CI are the user's own content — never
 // clobber if they exist.
 let constitutionWritten = false;
@@ -386,6 +435,7 @@ for (const [rel, content] of [
   [".gitignore", gitignore],
   [".gitattributes", gitattributes],
   [".github/workflows/kit-check.yml", kitCiWorkflow],
+  [".github/workflows/kit-security.yml", kitSecurityWorkflow],
 ]) {
   const ex = existsSync(pp(rel));
   if (DRY) { log(ex ? "keep existing" : "would write", rel); continue; }

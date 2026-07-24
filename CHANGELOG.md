@@ -4,6 +4,23 @@ All notable changes to `@zusem/smkit` are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.25] — 2026-07-24
+
+### Added — thinking-lenses (systems · critical · quantitative · communication)
+Four thinking styles were scattered and easy to skip. New **`thinking-lenses`** skill is a mandatory short cross-cut on non-trivial decisions:
+- **Systems** — feedback, who else feels this, delayed effects (pairs with richer `impact-map`)
+- **Critical** — premise + steelman (pairs with `senior-reasoning`)
+- **Quantitative** — number/estimate + basis + measurement plan (pairs with `smart-value`)
+- **Communication** — audience + so-what (pairs with `decision-brief` / `/handoff`)
+Wired into deliberate-then-act, senior-reasoning, smart-value, decision-brief, `/ship` Design, `/challenge`, analyst, orchestrator, command-routing. One skill — not four — to avoid bloat.
+
+### Added — hybrid security (mandatory review + CI scanners)
+The kit already had `security-review` (OWASP/STRIDE) but money/auth paths could ship without it, and there was no starter scanner CI:
+- **Evidence gate** — money/auth/PII (and secrets/shell/user paths·URLs) require a filled **`security-review`** output; documents scanner vs logic-review split.
+- **`/ship` Verify · `/review` · reviewer · orchestrator · routing · task Gate status · handoff · release-check** — wire the requirement; quote `kit-security` jobs when present.
+- **`ci-pipeline`** — §8 security scanners (npm audit · gitleaks · Trivy); required output field for scanner plan.
+- **`init` seeds** `.github/workflows/kit-security.yml` (never clobber) — optional automated layer; does not replace agent authz review.
+
 ## [0.1.24] — 2026-07-24
 
 ### Added — async-workflows + infra-iac (opt-in depth)

@@ -47,13 +47,31 @@ Default to read-only; elevate per job. OIDC to cloud > long-lived access keys wh
 - `kit-check` / `smkit check` when the repo uses the kit — keep agent config from drifting
 - Don't mark a check optional if merge safety depends on it
 
-## 8. Anti-patterns
+## 8. Security scanners (hybrid with `security-review`)
+Wire **automated** scans in CI; keep **`security-review`** for authz/business-logic:
+| Job | Catches | Typical tool |
+|---|---|---|
+| Dependency audit | Known CVEs in packages | `npm audit` / `pip-audit` / `govulncheck` |
+| Secret scan | Keys/tokens committed | gitleaks / trufflehog |
+| FS / image scan | OS & lib vulns in tree/image | Trivy / Grype |
+
+Starter workflow (init may seed `.github/workflows/kit-security.yml` — never clobber):
+- Run on `pull_request` + `push` to main/dev
+- `permissions: contents: read` (add `security-events: write` only if uploading SARIF)
+- Skip npm audit gracefully when no lockfile; fail on HIGH/CRITICAL when configured
+- Do **not** treat a green Trivy as “no IDOR” — still require `security-review` on money/auth/PII
+
+Record which jobs are required checks in the Decision Log so `/ship` can quote them.
+
+## 9. Anti-patterns
 - `on: push` to main with force-deploy and no tests
 - World-writable `permissions: write-all`
 - Duplicating five near-identical workflows instead of a reusable workflow / matrix
 - Storing production kubeconfig or cloud keys in the repo
+- Claiming “secure” from agent review alone while CI security jobs are red or absent without disclosure
 
 ## Sources
 - GitHub docs — workflow permissions, environments, hardened practices
 - SLSA / supply-chain basics — pin artifacts, least privilege
 - Kit `release-check` / SRE gradual rollout — promote, don't rebuild differently per env
+- Kit `security-review` — OWASP/STRIDE logic review complementary to scanners

@@ -10,5 +10,6 @@ description: Review the current changes for correctness and consistency with the
 2. Check two things:
    - **Correctness:** obvious bugs, missing error handling, broken edge cases.
    - **Consistency:** matches the Constitution + Decision Log; no second way to do an existing thing; naming/structure follow convention; no `invariant` violated.
-3. Report findings in plain language, most severe first. Say clearly if it's good to ship.
-4. In `standard`/`strict`, run the project's tests before giving a verdict; never report green on unverified work.
+3. If the diff touches **money · auth · PII · secrets · shell/exec · user-controlled file paths or URLs**, also run the **`security-review`** skill (`references/security-guide.md`) — required output with exploit scenarios; do not skip with "looks fine."
+4. Report findings in plain language, most severe first. Say clearly if it's good to ship.
+5. In `standard`/`strict`, run the project's tests before giving a verdict; never report green on unverified work.

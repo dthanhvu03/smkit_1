@@ -45,11 +45,19 @@ deliberate, scratchpad rules, and anti-patterns (performative thinking).
 - Options (≥2, including do-nothing or cheapest):
 - Pick + because:
 - Stop-conditions (when I must ask the founder / HO):
+- Thinking lenses (or "see block below" if expanded this turn):
 - Next skill / command:
+
+## Thinking lenses
+- **Systems:** …
+- **Critical:** …
+- **Quantitative:** …
+- **Communication:** …
 ```
 
 **Quality bar:** acting (code write, “ship it”, or a single-path recommendation) **without**
 this scratchpad on a non-trivial task **fails this skill — redo with the scratchpad first**.
-In `strict` (kit default) the full scratchpad is mandatory; never compress it away. A
+Missing **Thinking lenses** on a non-trivial pick also fails (run/`thinking-lenses`). In `strict`
+(kit default) the full scratchpad + lenses are mandatory; never compress them away. A
 scratchpad of empty bullets or “N/A” everywhere also fails — fill real content or state a
 precise skip reason from “When to run”.
